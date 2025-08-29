@@ -21,6 +21,38 @@ import {
   MOCHA_SESSION_TOKEN_COOKIE_NAME,
 } from "@getmocha/users-service/backend";
 import { getCookie, setCookie } from "hono/cookie";
+import {
+  securityHeadersMiddleware,
+  ipBlockingMiddleware,
+  rateLimitMiddleware,
+  requestLoggingMiddleware,
+  inputValidationMiddleware,
+  sqlInjectionMiddleware,
+  suspiciousActivityMiddleware,
+  requireRole,
+  requirePermissions,
+  requireOwnership
+} from "@/shared/security-middleware";
+import { auditLogger } from "@/shared/security-utils";
+import { AIChatService, ChatRequestSchema as EnhancedChatRequestSchema } from "@/shared/ai-chat-service";
+import { EnhancedEmailService } from "@/shared/enhanced-email-service";
+import { NotificationService } from "@/shared/notification-service";
+import { PaymentService } from "@/server/services/PaymentService";
+import { ChatRequestSchema as LegacyChatRequestSchema } from "@/shared/types";
+import { z } from 'zod';
+
+// Booking validation schemas
+export const BookingCreateSchema = z.object({
+  property_id: z.number().positive(),
+  check_in_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  check_out_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  guests: z.number().min(1).max(20),
+  guest_name: z.string().min(2).max(100),
+  guest_email: z.string().email(),
+  guest_phone: z.string().min(10),
+  special_requests: z.string().optional(),
+  promo_code: z.string().optional()
+});
 
 const app = new Hono<{ Bindings: Env }>();
 
@@ -404,127 +436,459 @@ app.post("/api/properties", authMiddleware, zValidator("json", CreatePropertySch
   });
 });
 
+// Helper function for generating alternative booking dates
+async function generateAlternativeDates(db: any, propertyId: number, originalCheckIn: string, originalCheckOut: string): Promise<Array<{ check_in: string; check_out: string; price: number }>> {
+  try {
+    const checkIn = new Date(originalCheckIn);
+    const checkOut = new Date(originalCheckOut);
+    const nightsDuration = Math.ceil((checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60 * 24));
+    
+    const suggestions = [];
+    
+    // Try different starting dates (1, 3, 7, 14 days later)
+    for (const dayOffset of [1, 3, 7, 14]) {
+      const newCheckIn = new Date(checkIn);
+      newCheckIn.setDate(newCheckIn.getDate() + dayOffset);
+      
+      const newCheckOut = new Date(newCheckIn);
+      newCheckOut.setDate(newCheckOut.getDate() + nightsDuration);
+      
+      const checkInStr = newCheckIn.toISOString().split('T')[0];
+      const checkOutStr = newCheckOut.toISOString().split('T')[0];
+      
+      // Check availability
+      const conflictingBooking = await db.prepare(`
+        SELECT id FROM bookings 
+        WHERE property_id = ? 
+        AND status IN ('pending', 'confirmed')
+        AND (
+          (check_in_date < ? AND check_out_date > ?) OR
+          (check_in_date < ? AND check_out_date > ?) OR
+          (check_in_date >= ? AND check_out_date <= ?)
+        )
+      `).bind(
+        propertyId,
+        checkOutStr, checkInStr,
+        checkOutStr, checkOutStr,
+        checkInStr, checkOutStr
+      ).first();
+      
+      if (!conflictingBooking) {
+        // Get property price for suggestion
+        const property = await db.prepare('SELECT price_per_night FROM properties WHERE id = ?').bind(propertyId).first();
+        const totalPrice = property ? (property.price_per_night * nightsDuration * 1.32) : 0; // Include fees estimate
+        
+        suggestions.push({
+          check_in: checkInStr,
+          check_out: checkOutStr,
+          price: Math.round(totalPrice)
+        });
+        
+        if (suggestions.length >= 3) break; // Limit to 3 suggestions
+      }
+    }
+    
+    return suggestions;
+  } catch (error) {
+    console.error('Alternative dates generation error:', error);
+    return [];
+  }
+}
+
+// Helper function for detailed pricing calculation
+async function calculateDetailedPricing(db: any, propertyId: number, checkInDate: string, checkOutDate: string, guests: number, promoCode?: string): Promise<{
+  base_price: number;
+  nights: number;
+  subtotal: number;
+  cleaning_fee: number;
+  service_fee: number;
+  taxes: number;
+  discounts: number;
+  total_amount: number;
+}> {
+  try {
+    const property = await db.prepare('SELECT * FROM properties WHERE id = ?').bind(propertyId).first();
+    if (!property) throw new Error('Property not found');
+
+    const checkIn = new Date(checkInDate);
+    const checkOut = new Date(checkOutDate);
+    const nights = Math.ceil((checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60 * 24));
+
+    // Base pricing
+    let basePrice = property.price_per_night;
+
+    // Calculate subtotal
+    const subtotal = basePrice * nights;
+
+    // Service fees
+    const serviceFeeRate = 0.12; // 12%
+    const serviceFee = Math.round(subtotal * serviceFeeRate);
+
+    // Cleaning fee
+    const cleaningFee = property.cleaning_fee || Math.round(basePrice * 0.15); // 15% of nightly rate
+
+    // Taxes (VAT)
+    const taxRate = 0.15; // 15% VAT in Saudi Arabia
+    const taxableAmount = subtotal + serviceFee + cleaningFee;
+    const taxes = Math.round(taxableAmount * taxRate);
+
+    // Calculate discounts
+    let totalDiscountAmount = 0;
+    
+    // Weekly discount (7+ nights)
+    if (nights >= 7) {
+      totalDiscountAmount += Math.round(subtotal * 0.1); // 10%
+    }
+    
+    // Monthly discount (28+ nights)
+    if (nights >= 28) {
+      totalDiscountAmount += Math.round(subtotal * 0.15); // Additional 15%
+    }
+    
+    // Promo code discount
+    if (promoCode) {
+      const promo = await db.prepare(`
+        SELECT * FROM promo_codes 
+        WHERE code = ? 
+        AND is_active = 1 
+        AND (expires_at IS NULL OR expires_at > datetime('now'))
+        AND (usage_count < max_uses OR max_uses IS NULL)
+      `).bind(promoCode).first();
+
+      if (promo) {
+        let promoDiscount = 0;
+        if (promo.discount_type === 'percentage') {
+          promoDiscount = Math.round(subtotal * (promo.discount_value / 100));
+        } else if (promo.discount_type === 'fixed') {
+          promoDiscount = Math.min(promo.discount_value, subtotal);
+        }
+        totalDiscountAmount += promoDiscount;
+      }
+    }
+
+    // Calculate total
+    const totalAmount = Math.max(subtotal + serviceFee + cleaningFee + taxes - totalDiscountAmount, 0);
+
+    return {
+      base_price: basePrice,
+      nights,
+      subtotal,
+      cleaning_fee: cleaningFee,
+      service_fee: serviceFee,
+      taxes,
+      discounts: totalDiscountAmount,
+      total_amount: totalAmount
+    };
+
+  } catch (error) {
+    console.error('Pricing calculation error:', error);
+    throw new Error('Failed to calculate pricing');
+  }
+}
+
 // Bookings routes
-app.post("/api/bookings", zValidator("json", CreateBookingSchema), async (c) => {
+app.post("/api/bookings", zValidator("json", BookingCreateSchema), async (c) => {
   const data = c.req.valid("json");
+  const userId = c.get("user")?.id;
+  const ip = c.req.header('cf-connecting-ip') || 'unknown';
   
-  // Calculate total amount
-  const property = await c.env.DB.prepare(
-    "SELECT * FROM properties WHERE id = ? AND is_active = 1"
-  ).bind(data.property_id).first();
-  
-  if (!property) {
+  try {
+    // Validate booking data
+    const property = await c.env.DB.prepare(
+      "SELECT * FROM properties WHERE id = ? AND is_active = 1"
+    ).bind(data.property_id).first();
+    
+    if (!property) {
+      return c.json<ApiResponse>({
+        success: false,
+        error: "Property not found or inactive",
+      }, 404);
+    }
+
+    // Validate dates
+    const checkIn = new Date(data.check_in_date);
+    const checkOut = new Date(data.check_out_date);
+    const todayValidation = new Date();
+    todayValidation.setHours(0, 0, 0, 0);
+
+    if (checkIn < todayValidation) {
+      return c.json<ApiResponse>({
+        success: false,
+        error: 'Check-in date cannot be in the past'
+      }, 400);
+    }
+
+    if (checkOut <= checkIn) {
+      return c.json<ApiResponse>({
+        success: false,
+        error: 'Check-out date must be after check-in date'
+      }, 400);
+    }
+
+    // Check guest capacity
+    if (data.guests > (property as any).max_guests) {
+      return c.json<ApiResponse>({
+        success: false,
+        error: `Property can accommodate maximum ${(property as any).max_guests} guests`
+      }, 400);
+    }
+
+    // Atomic availability check
+    const conflictingBooking = await c.env.DB.prepare(`
+      SELECT id FROM bookings 
+      WHERE property_id = ? 
+      AND status IN ('pending', 'confirmed')
+      AND (
+        (check_in_date < ? AND check_out_date > ?) OR
+        (check_in_date < ? AND check_out_date > ?) OR
+        (check_in_date >= ? AND check_out_date <= ?)
+      )
+    `).bind(
+      data.property_id,
+      data.check_out_date, data.check_in_date,
+      data.check_out_date, data.check_out_date,
+      data.check_in_date, data.check_out_date
+    ).first();
+    
+    if (conflictingBooking) {
+      // Generate alternative dates
+      const alternatives = await generateAlternativeDates(c.env.DB, data.property_id, data.check_in_date, data.check_out_date);
+      
+      return c.json<ApiResponse>({
+        success: false,
+        error: "Property is not available for selected dates",
+        suggested_dates: alternatives
+      } as any, 409);
+    }
+
+    // Calculate detailed pricing
+    const pricing = await calculateDetailedPricing(
+      c.env.DB, 
+      data.property_id, 
+      data.check_in_date, 
+      data.check_out_date, 
+      data.guests,
+      data.promo_code
+    );
+
+    // Generate unique booking ID
+    const bookingId = `HBS${Date.now().toString().slice(-8)}${Math.random().toString(36).substr(2, 4).toUpperCase()}`;
+
+    // Create booking with transaction
+    const result = await c.env.DB.prepare(`
+      INSERT INTO bookings (
+        id, user_id, property_id, check_in_date, check_out_date, guests,
+        total_amount, status, guest_name, guest_email, guest_phone,
+        special_requests, pricing_breakdown, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      bookingId,
+      userId || 'guest',
+      data.property_id,
+      data.check_in_date,
+      data.check_out_date,
+      data.guests,
+      pricing.total_amount,
+      'pending',
+      data.guest_name,
+      data.guest_email,
+      data.guest_phone,
+      data.special_requests || '',
+      JSON.stringify(pricing),
+      new Date().toISOString(),
+      new Date().toISOString()
+    ).run();
+
+    if (!result.success) {
+      return c.json<ApiResponse>({
+        success: false,
+        error: "Failed to create booking",
+      }, 500);
+    }
+
+    // Update property analytics
+    const todayAnalytics = new Date().toISOString().split('T')[0];
+    await c.env.DB.prepare(`
+      INSERT INTO property_analytics (property_id, bookings, revenue, date) 
+      VALUES (?, 1, ?, ?)
+      ON CONFLICT(property_id, date) 
+      DO UPDATE SET 
+        bookings = bookings + 1, 
+        revenue = revenue + ?,
+        updated_at = CURRENT_TIMESTAMP
+    `).bind(data.property_id, pricing.total_amount, todayAnalytics, pricing.total_amount).run();
+
+    // Send booking confirmation email
+    await sendEmail(c.env, data.guest_email, EMAIL_TEMPLATES.BOOKING_CONFIRMATION, {
+      guest_name: data.guest_name,
+      property_title: (property as any).title,
+      property_location: (property as any).location,
+      check_in_date: new Date(data.check_in_date).toLocaleDateString(),
+      check_out_date: new Date(data.check_out_date).toLocaleDateString(),
+      guests: data.guests,
+      total_amount: pricing.total_amount,
+      booking_id: bookingId,
+      nights: pricing.nights,
+      base_price: pricing.base_price,
+      service_fee: pricing.service_fee,
+      cleaning_fee: pricing.cleaning_fee,
+      taxes: pricing.taxes,
+      discounts: pricing.discounts
+    });
+
+    // Log booking creation
+    await auditLogger.log({
+      userId: userId || 'anonymous',
+      ip,
+      action: 'BOOKING_CREATED',
+      resource: `/api/bookings`,
+      details: {
+        booking_id: bookingId,
+        property_id: data.property_id,
+        total_amount: pricing.total_amount,
+        guests: data.guests,
+        nights: pricing.nights
+      },
+      success: true
+    });
+
+    return c.json<ApiResponse>({
+      success: true,
+      data: {
+        booking_id: bookingId,
+        total_amount: pricing.total_amount,
+        pricing_breakdown: pricing,
+        status: 'pending',
+        property_title: (property as any).title,
+        next_step: {
+          action: 'payment_required',
+          payment_endpoint: '/api/payments/create',
+          payment_data: {
+            bookingId: bookingId,
+            amount: pricing.total_amount,
+            currency: 'SAR',
+            description: `Booking for ${(property as any).title}`,
+            available_providers: ['myfatoorah', 'paypal']
+          }
+        }
+      },
+    });
+    
+  } catch (error) {
+    console.error('Booking creation error:', error);
+    
+    // Log booking error
+    await auditLogger.log({
+      userId: userId || 'anonymous',
+      ip,
+      action: 'BOOKING_CREATE_ERROR',
+      resource: `/api/bookings`,
+      details: {
+        property_id: data.property_id,
+        error: (error as Error).message
+      },
+      success: false
+    });
+    
     return c.json<ApiResponse>({
       success: false,
-      error: "Property not found",
-    }, 404);
-  }
-  
-  const checkIn = new Date(data.check_in_date);
-  const checkOut = new Date(data.check_out_date);
-  const nights = Math.ceil((checkOut.getTime() - checkIn.getTime()) / (1000 * 60 * 60 * 24));
-  
-  if (nights <= 0) {
-    return c.json<ApiResponse>({
-      success: false,
-      error: "Invalid date range",
-    }, 400);
-  }
-  
-  const baseAmount = nights * (property as any).price_per_night;
-  const serviceFee = Math.round(baseAmount * 0.05); // 5% service fee
-  const taxes = Math.round(baseAmount * 0.15); // 15% VAT
-  const totalAmount = baseAmount + serviceFee + taxes;
-  
-  // Check availability (simplified - check for overlapping bookings)
-  const conflictingBooking = await c.env.DB.prepare(`
-    SELECT id FROM bookings 
-    WHERE property_id = ? 
-    AND status NOT IN ('cancelled', 'rejected')
-    AND (
-      (check_in_date <= ? AND check_out_date > ?) OR
-      (check_in_date < ? AND check_out_date >= ?) OR
-      (check_in_date >= ? AND check_out_date <= ?)
-    )
-  `).bind(
-    data.property_id,
-    data.check_in_date, data.check_in_date,
-    data.check_out_date, data.check_out_date,
-    data.check_in_date, data.check_out_date
-  ).first();
-  
-  if (conflictingBooking) {
-    return c.json<ApiResponse>({
-      success: false,
-      error: "Property is not available for selected dates",
-    }, 400);
-  }
-  
-  const result = await c.env.DB.prepare(`
-    INSERT INTO bookings (user_id, property_id, guest_name, guest_email, guest_phone, check_in_date, check_out_date, total_guests, total_amount, special_requests)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).bind(
-    'guest', // For non-authenticated bookings
-    data.property_id,
-    data.guest_name,
-    data.guest_email,
-    data.guest_phone || null,
-    data.check_in_date,
-    data.check_out_date,
-    data.total_guests,
-    totalAmount,
-    data.special_requests || null
-  ).run();
-  
-  if (!result.success) {
-    return c.json<ApiResponse>({
-      success: false,
-      error: "Failed to create booking",
+      error: "Failed to create booking: " + (error as Error).message,
     }, 500);
   }
-  
-  const bookingId = result.meta.last_row_id;
-  
-  // Send booking confirmation email
-  await sendEmail(c.env, data.guest_email, EMAIL_TEMPLATES.BOOKING_CONFIRMATION, {
-    guest_name: data.guest_name,
-    property_title: (property as any).title,
-    property_location: (property as any).location,
-    check_in_date: new Date(data.check_in_date).toLocaleDateString(),
-    check_out_date: new Date(data.check_out_date).toLocaleDateString(),
-    total_guests: data.total_guests,
-    total_amount: totalAmount,
-    booking_id: bookingId,
-    property_url: `${c.req.url.split('/api')[0]}/property/${data.property_id}`,
-  });
-  
-  // Update analytics
-  const today = new Date().toISOString().split('T')[0];
-  await c.env.DB.prepare(`
-    INSERT INTO property_analytics (property_id, bookings, revenue, date) 
-    VALUES (?, 1, ?, ?)
-    ON CONFLICT(property_id, date) 
-    DO UPDATE SET 
-      bookings = bookings + 1, 
-      revenue = revenue + ?,
-      updated_at = CURRENT_TIMESTAMP
-  `).bind(data.property_id, totalAmount, today, totalAmount).run();
-  
-  return c.json<ApiResponse>({
-    success: true,
-    message: "Booking created successfully",
-    data: { 
-      booking_id: bookingId,
-      total_amount: totalAmount,
-      base_amount: baseAmount,
-      service_fee: serviceFee,
-      taxes: taxes,
-    },
-  });
 });
 
-// Chat routes
-app.post("/api/chat", zValidator("json", ChatRequestSchema), async (c) => {
+// Chat routes - Enhanced AI Chat Service Integration
+app.post("/api/chat/enhanced", zValidator("json", EnhancedChatRequestSchema), async (c) => {
+  try {
+    const requestData = c.req.valid("json");
+    const user = c.get("user");
+    const ip = c.req.header("cf-connecting-ip") || c.req.header("x-forwarded-for") || "unknown";
+    
+    // Initialize AI Chat Service
+    const aiChatService = new AIChatService(c.env.DB);
+    
+    // Enhanced context with property and booking information
+    const enhancedContext: any = {
+      ...requestData.context,
+      ip_address: ip,
+      user_agent: c.req.header("user-agent") || "unknown",
+      session_id: c.req.header("x-session-id") || "anonymous"
+    };
+    
+    // If user is viewing a property, add property details to context
+    if (requestData.context?.property_id) {
+      const property = await c.env.DB.prepare(
+        "SELECT * FROM properties WHERE id = ? AND is_active = 1"
+      ).bind(requestData.context.property_id).first();
+      
+      if (property) {
+        enhancedContext.property_details = {
+          title: property.title,
+          location: property.location,
+          price_per_night: property.price_per_night,
+          max_guests: property.max_guests,
+          amenities: property.amenities,
+          description: property.description
+        };
+      }
+    }
+    
+    // Add featured properties for recommendations
+    const { results: featuredProperties } = await c.env.DB.prepare(
+      "SELECT id, title, location, price_per_night, max_guests, description FROM properties WHERE is_featured = 1 AND is_active = 1 ORDER BY created_at DESC LIMIT 3"
+    ).all();
+    enhancedContext.featured_properties = featuredProperties;
+    
+    // Process chat request
+    const chatRequest = {
+      message: requestData.message,
+      conversation_id: requestData.conversation_id,
+      user_id: user?.id,
+      context: enhancedContext,
+      model_preferences: requestData.model_preferences
+    };
+    
+    const result = await aiChatService.processMessage(chatRequest, user?.id);
+    
+    if (result.success) {
+      // Log successful interaction
+      await auditLogger.log({
+        userId: user?.id || 'anonymous',
+        ip,
+        action: 'CHAT_INTERACTION',
+        resource: '/api/chat/enhanced',
+        details: {
+          conversation_id: result.data?.conversation_id || 'unknown',
+          message_length: requestData.message.length,
+          response_length: result.data?.message.length || 0,
+          tokens_used: result.data?.tokens_used || 0,
+          confidence: result.data?.confidence || 0
+        },
+        success: true
+      });
+      
+      return c.json<ApiResponse>({
+        success: true,
+        data: result.data
+      });
+    } else {
+      return c.json<ApiResponse>({
+        success: false,
+        error: result.error
+      }, 400);
+    }
+    
+  } catch (error) {
+    console.error('Enhanced AI Chat error:', error);
+    return c.json<ApiResponse>({
+      success: false,
+      error: "Unable to process your message at this time. Please try again."
+    }, 500);
+  }
+});
+
+// Legacy chat endpoint (kept for backward compatibility)
+app.post("/api/chat", zValidator("json", LegacyChatRequestSchema), async (c) => {
   const { message } = c.req.valid("json");
   
   if (!c.env.OPENAI_API_KEY) {
@@ -577,6 +941,267 @@ Keep responses conversational, helpful, and focused on creating an exceptional g
     return c.json<ApiResponse>({
       success: false,
       error: "Failed to process chat message",
+    }, 500);
+  }
+});
+
+// AI Configuration Management Routes
+app.get("/api/admin/ai-config", authMiddleware, requireRole(['admin']), async (c) => {
+  try {
+    const config = await c.env.DB.prepare(`
+      SELECT * FROM ai_config WHERE is_active = 1 ORDER BY id DESC LIMIT 1
+    `).first();
+    
+    return c.json<ApiResponse>({
+      success: true,
+      data: config || {
+        model_provider: 'openai',
+        model_name: 'gpt-4o-mini',
+        temperature: 0.7,
+        max_tokens: 500,
+        personality: 'friendly',
+        language: 'en',
+        is_active: false
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching AI config:', error);
+    return c.json<ApiResponse>({
+      success: false,
+      error: 'Failed to fetch AI configuration'
+    }, 500);
+  }
+});
+
+app.post("/api/admin/ai-config", authMiddleware, requireRole(['admin']), async (c) => {
+  try {
+    const body = await c.req.json();
+    const user = c.get("user");
+    
+    // Validate configuration
+    const validProviders = ['openai', 'anthropic', 'gemini'];
+    const validPersonalities = ['professional', 'friendly', 'casual'];
+    
+    if (!validProviders.includes(body.model_provider)) {
+      return c.json<ApiResponse>({
+        success: false,
+        error: 'Invalid model provider'
+      }, 400);
+    }
+    
+    if (!validPersonalities.includes(body.personality)) {
+      return c.json<ApiResponse>({
+        success: false,
+        error: 'Invalid personality setting'
+      }, 400);
+    }
+    
+    // Deactivate existing configurations
+    await c.env.DB.prepare(
+      "UPDATE ai_config SET is_active = 0, updated_at = ? WHERE is_active = 1"
+    ).bind(new Date().toISOString()).run();
+    
+    // Insert new configuration
+    const configId = await c.env.DB.prepare(`
+      INSERT INTO ai_config (
+        model_provider, model_name, api_key, temperature, max_tokens,
+        system_prompt, personality, language, is_active, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).bind(
+      body.model_provider,
+      body.model_name,
+      body.api_key || null,
+      body.temperature || 0.7,
+      body.max_tokens || 500,
+      body.system_prompt || null,
+      body.personality,
+      body.language || 'en',
+      1,
+      new Date().toISOString(),
+      new Date().toISOString()
+    ).run();
+    
+    // Log configuration change
+    await auditLogger.log({
+      userId: user?.id || 'admin',
+      ip: c.req.header("cf-connecting-ip") || "unknown",
+      action: 'AI_CONFIG_UPDATE',
+      resource: '/api/admin/ai-config',
+      details: {
+        config_id: configId.meta.last_row_id,
+        model_provider: body.model_provider,
+        model_name: body.model_name,
+        personality: body.personality
+      },
+      success: true
+    });
+    
+    return c.json<ApiResponse>({
+      success: true,
+      message: 'AI configuration updated successfully'
+    });
+    
+  } catch (error) {
+    console.error('Error updating AI config:', error);
+    return c.json<ApiResponse>({
+      success: false,
+      error: 'Failed to update AI configuration'
+    }, 500);
+  }
+});
+
+app.post("/api/admin/ai-config/test", authMiddleware, requireRole(['admin']), async (c) => {
+  try {
+    const body = await c.req.json();
+    const testMessage = body.message || "Hello, this is a test message. Please respond briefly.";
+    
+    // Initialize AI Chat Service
+    const aiChatService = new AIChatService(c.env.DB);
+    
+    // Test message with basic context
+    const testRequest = {
+      message: testMessage,
+      context: {
+        user_preferences: { test_mode: true }
+      }
+    };
+    
+    const startTime = Date.now();
+    const result = await aiChatService.processMessage(testRequest);
+    const responseTime = Date.now() - startTime;
+    
+    if (result.success) {
+      return c.json<ApiResponse>({
+        success: true,
+        data: {
+          response: result.data?.message || 'No response',
+          latency: responseTime,
+          tokens_used: result.data?.tokens_used || 0,
+          confidence: result.data?.confidence || 0
+        }
+      });
+    } else {
+      return c.json<ApiResponse>({
+        success: false,
+        error: result.error
+      }, 400);
+    }
+    
+  } catch (error) {
+    console.error('AI test error:', error);
+    return c.json<ApiResponse>({
+      success: false,
+      error: 'AI service test failed'
+    }, 500);
+  }
+});
+
+// Chat Conversation Management Routes
+app.get("/api/chat/conversations", authMiddleware, async (c) => {
+  const user = c.get("user");
+  if (!user) {
+    return c.json<ApiResponse>({
+      success: false,
+      error: "User not authenticated",
+    }, 401);
+  }
+  
+  try {
+    const { results } = await c.env.DB.prepare(`
+      SELECT id, user_id, updated_at, is_active,
+             json_extract(messages, '$[0].content') as first_message,
+             json_array_length(messages) as message_count
+      FROM chat_conversations 
+      WHERE user_id = ? AND is_active = 1
+      ORDER BY updated_at DESC
+      LIMIT 50
+    `).bind(user.id).all();
+    
+    return c.json<ApiResponse>({
+      success: true,
+      data: results.map((conv: any) => ({
+        id: conv.id,
+        first_message: conv.first_message ? conv.first_message.substring(0, 100) + '...' : 'New conversation',
+        message_count: conv.message_count || 0,
+        updated_at: conv.updated_at
+      }))
+    });
+  } catch (error) {
+    console.error('Error fetching conversations:', error);
+    return c.json<ApiResponse>({
+      success: false,
+      error: 'Failed to fetch conversations'
+    }, 500);
+  }
+});
+
+app.get("/api/chat/conversations/:conversationId", authMiddleware, async (c) => {
+  const user = c.get("user");
+  if (!user) {
+    return c.json<ApiResponse>({
+      success: false,
+      error: "User not authenticated",
+    }, 401);
+  }
+  const conversationId = c.req.param("conversationId");
+  
+  try {
+    const conversation = await c.env.DB.prepare(`
+      SELECT * FROM chat_conversations 
+      WHERE id = ? AND user_id = ? AND is_active = 1
+    `).bind(conversationId, user.id).first();
+    
+    if (!conversation) {
+      return c.json<ApiResponse>({
+        success: false,
+        error: 'Conversation not found'
+      }, 404);
+    }
+    
+    return c.json<ApiResponse>({
+      success: true,
+      data: {
+        id: conversation.id,
+        messages: JSON.parse(conversation.messages || '[]'),
+        context: JSON.parse(conversation.context || '{}'),
+        updated_at: conversation.updated_at
+      }
+    });
+  } catch (error) {
+    console.error('Error fetching conversation:', error);
+    return c.json<ApiResponse>({
+      success: false,
+      error: 'Failed to fetch conversation'
+    }, 500);
+  }
+});
+
+app.delete("/api/chat/conversations/:conversationId", authMiddleware, async (c) => {
+  const user = c.get("user");
+  if (!user) {
+    return c.json<ApiResponse>({
+      success: false,
+      error: "User not authenticated",
+    }, 401);
+  }
+  const conversationId = c.req.param("conversationId");
+  
+  try {
+    const { success } = await c.env.DB.prepare(`
+      UPDATE chat_conversations 
+      SET is_active = 0, updated_at = ?
+      WHERE id = ? AND user_id = ?
+    `).bind(new Date().toISOString(), conversationId, user.id).run();
+    
+    return c.json<ApiResponse>({
+      success,
+      message: success ? 'Conversation deleted successfully' : 'Failed to delete conversation'
+    });
+  } catch (error) {
+    console.error('Error deleting conversation:', error);
+    return c.json<ApiResponse>({
+      success: false,
+      error: 'Failed to delete conversation'
     }, 500);
   }
 });
@@ -987,7 +1612,413 @@ app.get("/api/admin/settings/:key", async (c) => {
   });
 });
 
-// Payment routes
+// Enhanced Payment Integration Routes
+app.get("/api/payments/providers", async (c) => {
+  try {
+    const paymentService = new PaymentService(c.env.DB);
+    const providers = await paymentService.getPaymentProviders();
+    
+    return c.json<ApiResponse>({
+      success: true,
+      data: providers
+    });
+  } catch (error) {
+    console.error('Error fetching payment providers:', error);
+    return c.json<ApiResponse>({
+      success: false,
+      error: 'Failed to fetch payment providers'
+    }, 500);
+  }
+});
+
+app.get("/api/payments/methods/:provider", async (c) => {
+  try {
+    const provider = c.req.param('provider');
+    const currency = c.req.query('currency') || 'SAR';
+    
+    const paymentService = new PaymentService(c.env.DB);
+    const methods = await paymentService.getPaymentMethods(provider, currency);
+    
+    return c.json<ApiResponse>({
+      success: true,
+      data: methods
+    });
+  } catch (error) {
+    console.error('Error fetching payment methods:', error);
+    return c.json<ApiResponse>({
+      success: false,
+      error: 'Failed to fetch payment methods'
+    }, 500);
+  }
+});
+
+app.post("/api/payments/create", authMiddleware, async (c) => {
+  try {
+    const body = await c.req.json();
+    const user = c.get("user");
+    const ip = c.req.header("cf-connecting-ip") || "unknown";
+    
+    // Validate required fields
+    const { bookingId, amount, currency = 'SAR', provider = 'myfatoorah', description } = body;
+    
+    if (!bookingId || !amount || !description) {
+      return c.json<ApiResponse>({
+        success: false,
+        error: 'Missing required payment information'
+      }, 400);
+    }
+    
+    // Get booking details for customer info
+    const booking = await c.env.DB.prepare(
+      "SELECT * FROM bookings WHERE id = ?"
+    ).bind(bookingId).first();
+    
+    if (!booking) {
+      return c.json<ApiResponse>({
+        success: false,
+        error: 'Booking not found'
+      }, 404);
+    }
+    
+    // Create payment request
+    const paymentRequest = {
+      bookingId: bookingId.toString(),
+      amount: parseFloat(amount),
+      currency,
+      description,
+      customerInfo: {
+        name: booking.guest_name,
+        email: booking.guest_email,
+        phone: booking.guest_phone
+      },
+      metadata: {
+        user_id: user?.id,
+        ip_address: ip,
+        booking_reference: booking.id
+      }
+    };
+    
+    const paymentService = new PaymentService(c.env.DB);
+    const result = await paymentService.createPayment(paymentRequest, provider);
+    
+    // Log payment creation
+    await auditLogger.log({
+      userId: user?.id || 'anonymous',
+      ip,
+      action: 'PAYMENT_CREATE',
+      resource: '/api/payments/create',
+      details: {
+        payment_id: result.paymentId,
+        booking_id: bookingId,
+        amount,
+        provider,
+        success: result.success
+      },
+      success: result.success
+    });
+    
+    return c.json<ApiResponse>({
+      success: result.success,
+      data: {
+        payment_id: result.paymentId,
+        payment_url: result.paymentUrl,
+        transaction_id: result.transactionId,
+        status: result.status,
+        provider: result.provider
+      },
+      error: result.error
+    });
+    
+  } catch (error) {
+    console.error('Payment creation error:', error);
+    return c.json<ApiResponse>({
+      success: false,
+      error: 'Failed to create payment'
+    }, 500);
+  }
+});
+
+app.get("/api/payments/:paymentId/status", authMiddleware, async (c) => {
+  try {
+    const paymentId = c.req.param('paymentId');
+    const user = c.get("user");
+    
+    // Get payment record to determine provider
+    const payment = await c.env.DB.prepare(
+      "SELECT * FROM payments WHERE id = ?"
+    ).bind(paymentId).first();
+    
+    if (!payment) {
+      return c.json<ApiResponse>({
+        success: false,
+        error: 'Payment not found'
+      }, 404);
+    }
+    
+    // Check if user owns this payment (through booking)
+    if (user) {
+      const booking = await c.env.DB.prepare(
+        "SELECT user_id FROM bookings WHERE id = ?"
+      ).bind(payment.booking_id).first();
+      
+      if (booking?.user_id !== user.id) {
+        return c.json<ApiResponse>({
+          success: false,
+          error: 'Access denied'
+        }, 403);
+      }
+    }
+    
+    const paymentService = new PaymentService(c.env.DB);
+    const result = await paymentService.verifyPayment(paymentId, payment.provider);
+    
+    return c.json<ApiResponse>({
+      success: true,
+      data: {
+        payment_id: result.paymentId,
+        status: result.status,
+        amount: result.amount,
+        currency: result.currency,
+        transaction_id: result.transactionId
+      }
+    });
+    
+  } catch (error) {
+    console.error('Payment status error:', error);
+    return c.json<ApiResponse>({
+      success: false,
+      error: 'Failed to get payment status'
+    }, 500);
+  }
+});
+
+app.post("/api/payments/:paymentId/refund", authMiddleware, requireRole(['admin']), async (c) => {
+  try {
+    const paymentId = c.req.param('paymentId');
+    const body = await c.req.json();
+    const user = c.get("user");
+    const ip = c.req.header("cf-connecting-ip") || "unknown";
+    
+    const { amount, reason } = body;
+    
+    if (!amount || amount <= 0) {
+      return c.json<ApiResponse>({
+        success: false,
+        error: 'Valid refund amount is required'
+      }, 400);
+    }
+    
+    const paymentService = new PaymentService(c.env.DB);
+    const result = await paymentService.processRefund(paymentId, amount, reason);
+    
+    // Log refund attempt
+    await auditLogger.log({
+      userId: user?.id || 'admin',
+      ip,
+      action: 'PAYMENT_REFUND',
+      resource: '/api/payments/refund',
+      details: {
+        payment_id: paymentId,
+        refund_amount: amount,
+        reason,
+        success: result.success
+      },
+      success: result.success
+    });
+    
+    return c.json<ApiResponse>({
+      success: result.success,
+      data: {
+        refund_id: result.refundId,
+        amount: result.amount,
+        status: result.status
+      },
+      error: result.error
+    });
+    
+  } catch (error) {
+    console.error('Payment refund error:', error);
+    return c.json<ApiResponse>({
+      success: false,
+      error: 'Failed to process refund'
+    }, 500);
+  }
+});
+
+// Payment Webhook Endpoints
+app.post("/api/payments/webhook/myfatoorah", async (c) => {
+  try {
+    const body = await c.req.json();
+    const signature = c.req.header('X-MyFatoorah-Signature');
+    const timestamp = c.req.header('X-Timestamp') || new Date().toISOString();
+    
+    // Create webhook payload
+    const webhookPayload = {
+      provider: 'myfatoorah',
+      event: body.EventType || 'Payment.StatusChanged',
+      data: body,
+      signature,
+      timestamp,
+      metadata: {
+        user_agent: c.req.header('user-agent'),
+        ip_address: c.req.header('cf-connecting-ip')
+      }
+    };
+    
+    const paymentService = new PaymentService(c.env.DB);
+    await paymentService.handleWebhook(webhookPayload);
+    
+    return c.json({ success: true, message: 'Webhook processed successfully' });
+    
+  } catch (error) {
+    console.error('MyFatoorah webhook error:', error);
+    return c.json({ success: false, error: 'Webhook processing failed' }, 400);
+  }
+});
+
+app.post("/api/payments/webhook/paypal", async (c) => {
+  try {
+    const body = await c.req.json();
+    const headers = {
+      auth_algo: c.req.header('PAYPAL-AUTH-ALGO'),
+      cert_url: c.req.header('PAYPAL-CERT-URL'),
+      transmission_id: c.req.header('PAYPAL-TRANSMISSION-ID'),
+      transmission_sig: c.req.header('PAYPAL-TRANSMISSION-SIG'),
+      transmission_time: c.req.header('PAYPAL-TRANSMISSION-TIME'),
+      webhook_id: c.req.header('PAYPAL-WEBHOOK-ID')
+    };
+    
+    // Create webhook payload
+    const webhookPayload = {
+      provider: 'paypal',
+      event: body.event_type,
+      data: body.resource || body,
+      signature: headers.transmission_sig,
+      timestamp: headers.transmission_time || new Date().toISOString(),
+      metadata: {
+        ...headers,
+        event_id: body.id,
+        user_agent: c.req.header('user-agent'),
+        ip_address: c.req.header('cf-connecting-ip')
+      }
+    };
+    
+    const paymentService = new PaymentService(c.env.DB);
+    await paymentService.handleWebhook(webhookPayload);
+    
+    return c.json({ success: true, message: 'Webhook processed successfully' });
+    
+  } catch (error) {
+    console.error('PayPal webhook error:', error);
+    return c.json({ success: false, error: 'Webhook processing failed' }, 400);
+  }
+});
+
+// Payment Callback Endpoints (for redirect-based flows)
+app.get("/api/payments/callback/myfatoorah", async (c) => {
+  try {
+    const paymentId = c.req.query('paymentId');
+    const invoiceId = c.req.query('Id');
+    
+    if (!paymentId && !invoiceId) {
+      return c.redirect(`${process.env.APP_URL}/payment/error?message=Missing payment identifier`);
+    }
+    
+    const paymentService = new PaymentService(c.env.DB);
+    
+    // Get payment record
+    const payment = await c.env.DB.prepare(
+      "SELECT * FROM payments WHERE id = ? OR provider_transaction_id = ?"
+    ).bind(paymentId || invoiceId, invoiceId || paymentId).first();
+    
+    if (!payment) {
+      return c.redirect(`${process.env.APP_URL}/payment/error?message=Payment not found`);
+    }
+    
+    // Verify payment status
+    const result = await paymentService.verifyPayment(payment.id, 'myfatoorah');
+    
+    if (result.success && result.status === 'completed') {
+      // Update booking status
+      await c.env.DB.prepare(
+        "UPDATE bookings SET payment_status = 'completed', status = 'confirmed' WHERE id = ?"
+      ).bind(payment.booking_id).run();
+      
+      // Send confirmation notifications
+      const notificationService = new NotificationService(c.env.DB, null);
+      const booking = await c.env.DB.prepare("SELECT * FROM bookings WHERE id = ?").bind(payment.booking_id).first();
+      
+      if (booking) {
+        await notificationService.sendPaymentConfirmation(booking, result);
+      }
+      
+      return c.redirect(`${process.env.APP_URL}/payment/success?booking_id=${payment.booking_id}`);
+    } else {
+      return c.redirect(`${process.env.APP_URL}/payment/error?message=Payment verification failed`);
+    }
+    
+  } catch (error) {
+    console.error('MyFatoorah callback error:', error);
+    return c.redirect(`${process.env.APP_URL}/payment/error?message=Payment processing failed`);
+  }
+});
+
+app.get("/api/payments/callback/paypal", async (c) => {
+  try {
+    const token = c.req.query('token');
+    const paymentId = c.req.query('paymentId');
+    
+    if (!token && !paymentId) {
+      return c.redirect(`${process.env.APP_URL}/payment/error?message=Missing payment token`);
+    }
+    
+    const paymentService = new PaymentService(c.env.DB);
+    
+    // Get payment record
+    const payment = await c.env.DB.prepare(
+      "SELECT * FROM payments WHERE id = ? OR provider_transaction_id = ?"
+    ).bind(paymentId || token, token || paymentId).first();
+    
+    if (!payment) {
+      return c.redirect(`${process.env.APP_URL}/payment/error?message=Payment not found`);
+    }
+    
+    // Verify payment status
+    const result = await paymentService.verifyPayment(payment.id, 'paypal');
+    
+    if (result.success && result.status === 'completed') {
+      // Update booking status
+      await c.env.DB.prepare(
+        "UPDATE bookings SET payment_status = 'completed', status = 'confirmed' WHERE id = ?"
+      ).bind(payment.booking_id).run();
+      
+      // Send confirmation notifications
+      const notificationService = new NotificationService(c.env.DB, null);
+      const booking = await c.env.DB.prepare("SELECT * FROM bookings WHERE id = ?").bind(payment.booking_id).first();
+      
+      if (booking) {
+        await notificationService.sendPaymentConfirmation(booking, result);
+      }
+      
+      return c.redirect(`${process.env.APP_URL}/payment/success?booking_id=${payment.booking_id}`);
+    } else {
+      return c.redirect(`${process.env.APP_URL}/payment/error?message=Payment verification failed`);
+    }
+    
+  } catch (error) {
+    console.error('PayPal callback error:', error);
+    return c.redirect(`${process.env.APP_URL}/payment/error?message=Payment processing failed`);
+  }
+});
+
+app.get("/api/payments/error/myfatoorah", async (c) => {
+  const error = c.req.query('error') || 'Payment was cancelled or failed';
+  return c.redirect(`${process.env.APP_URL}/payment/error?message=${encodeURIComponent(error)}`);
+});
+
+app.get("/api/payments/cancel/paypal", async (c) => {
+  return c.redirect(`${process.env.APP_URL}/payment/error?message=Payment was cancelled`);
+});
 app.post("/api/payments/create", zValidator("json", CreatePaymentSchema), async (c) => {
   const { booking_id, amount, currency, return_url, cancel_url } = c.req.valid("json");
   

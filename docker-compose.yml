@@ -1,0 +1,282 @@
+# HabibiStay Docker Compose Configuration
+# Complete development and production environment setup
+
+version: '3.8'
+
+services:
+  # Main Application (Development)
+  app-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile.dev
+    container_name: habibistay-dev
+    ports:
+      - "3000:3000"
+      - "5173:5173"
+    volumes:
+      - .:/app
+      - /app/node_modules
+      - ./uploads:/app/uploads
+      - ./logs:/app/logs
+    environment:
+      - NODE_ENV=development
+      - DATABASE_URL=sqlite:./data/habibistay.db
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - JWT_SECRET=${JWT_SECRET}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - MYFATOORAH_API_KEY=${MYFATOORAH_API_KEY}
+      - MYFATOORAH_BASE_URL=${MYFATOORAH_BASE_URL}
+      - PAYPAL_CLIENT_ID=${PAYPAL_CLIENT_ID}
+      - PAYPAL_CLIENT_SECRET=${PAYPAL_CLIENT_SECRET}
+      - EMAIL_HOST=${EMAIL_HOST}
+      - EMAIL_PORT=${EMAIL_PORT}
+      - EMAIL_USER=${EMAIL_USER}
+      - EMAIL_PASS=${EMAIL_PASS}
+      - CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME}
+      - CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY}
+      - CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET}
+    depends_on:
+      - redis-dev
+    networks:
+      - habibistay-network
+    restart: unless-stopped
+    profiles:
+      - dev
+
+  # Redis for Development
+  redis-dev:
+    image: redis:7-alpine
+    container_name: habibistay-redis-dev
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-dev-data:/data
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    networks:
+      - habibistay-network
+    restart: unless-stopped
+    profiles:
+      - dev
+
+  # Main Application (Production)
+  app-prod:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: habibistay-prod
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./uploads:/app/uploads
+      - ./logs:/app/logs
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=${DATABASE_URL}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - JWT_SECRET=${JWT_SECRET}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - MYFATOORAH_API_KEY=${MYFATOORAH_API_KEY}
+      - MYFATOORAH_BASE_URL=${MYFATOORAH_BASE_URL}
+      - PAYPAL_CLIENT_ID=${PAYPAL_CLIENT_ID}
+      - PAYPAL_CLIENT_SECRET=${PAYPAL_CLIENT_SECRET}
+      - EMAIL_HOST=${EMAIL_HOST}
+      - EMAIL_PORT=${EMAIL_PORT}
+      - EMAIL_USER=${EMAIL_USER}
+      - EMAIL_PASS=${EMAIL_PASS}
+      - CLOUDINARY_CLOUD_NAME=${CLOUDINARY_CLOUD_NAME}
+      - CLOUDINARY_API_KEY=${CLOUDINARY_API_KEY}
+      - CLOUDINARY_API_SECRET=${CLOUDINARY_API_SECRET}
+      - REDIS_URL=redis://redis-prod:6379
+    depends_on:
+      - redis-prod
+      - postgres-prod
+    networks:
+      - habibistay-network
+    restart: unless-stopped
+    profiles:
+      - prod
+    deploy:
+      resources:
+        limits:
+          cpus: '2'
+          memory: 1G
+        reservations:
+          cpus: '1'
+          memory: 512M
+
+  # PostgreSQL for Production
+  postgres-prod:
+    image: postgres:15-alpine
+    container_name: habibistay-postgres-prod
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-habibistay}
+      - POSTGRES_USER=${POSTGRES_USER:-habibistay}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - postgres-prod-data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5432:5432"
+    networks:
+      - habibistay-network
+    restart: unless-stopped
+    profiles:
+      - prod
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+
+  # Redis for Production
+  redis-prod:
+    image: redis:7-alpine
+    container_name: habibistay-redis-prod
+    volumes:
+      - redis-prod-data:/data
+      - ./config/redis.conf:/usr/local/etc/redis/redis.conf
+    command: redis-server /usr/local/etc/redis/redis.conf
+    networks:
+      - habibistay-network
+    restart: unless-stopped
+    profiles:
+      - prod
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: habibistay-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./config/nginx.conf:/etc/nginx/nginx.conf
+      - ./config/ssl:/etc/ssl/certs
+      - ./logs/nginx:/var/log/nginx
+    depends_on:
+      - app-prod
+    networks:
+      - habibistay-network
+    restart: unless-stopped
+    profiles:
+      - prod
+
+  # Monitoring with Prometheus
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: habibistay-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./config/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    networks:
+      - habibistay-network
+    restart: unless-stopped
+    profiles:
+      - monitoring
+
+  # Grafana for Visualization
+  grafana:
+    image: grafana/grafana:latest
+    container_name: habibistay-grafana
+    ports:
+      - "3001:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./config/grafana/provisioning:/etc/grafana/provisioning
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_USER:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    networks:
+      - habibistay-network
+    restart: unless-stopped
+    profiles:
+      - monitoring
+
+  # Log Aggregation with Loki
+  loki:
+    image: grafana/loki:latest
+    container_name: habibistay-loki
+    ports:
+      - "3100:3100"
+    volumes:
+      - loki-data:/loki
+      - ./config/loki.yml:/etc/loki/local-config.yaml
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - habibistay-network
+    restart: unless-stopped
+    profiles:
+      - monitoring
+
+  # Log Collection with Promtail
+  promtail:
+    image: grafana/promtail:latest
+    container_name: habibistay-promtail
+    volumes:
+      - ./logs:/var/log/habibistay
+      - ./config/promtail.yml:/etc/promtail/config.yml
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki
+    networks:
+      - habibistay-network
+    restart: unless-stopped
+    profiles:
+      - monitoring
+
+  # Backup Service
+  backup:
+    image: postgres:15-alpine
+    container_name: habibistay-backup
+    volumes:
+      - ./backups:/backups
+      - ./scripts/backup.sh:/backup.sh
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-habibistay}
+      - POSTGRES_USER=${POSTGRES_USER:-habibistay}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_HOST=postgres-prod
+    depends_on:
+      - postgres-prod
+    networks:
+      - habibistay-network
+    restart: unless-stopped
+    profiles:
+      - prod
+    command: sh -c "chmod +x /backup.sh && crond -f"
+
+networks:
+  habibistay-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
+
+volumes:
+  postgres-prod-data:
+    driver: local
+  redis-prod-data:
+    driver: local
+  redis-dev-data:
+    driver: local
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local
+  loki-data:
+    driver: local

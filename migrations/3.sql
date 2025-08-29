@@ -1,6 +1,6 @@
 
 -- Insert sample properties for HabibiStay
-INSERT INTO properties (user_id, title, description, location, price_per_night, max_guests, bedrooms, bathrooms, amenities, images, is_featured, is_active) VALUES
+INSERT INTO properties (owner_id, title, description, location, price_per_night, max_guests, bedrooms, bathrooms, amenities, images, is_featured, is_active) VALUES
 ('owner1', 'Luxury Executive Suite in Olaya District', 'Modern luxury apartment in the heart of Riyadh''s business district. Perfect for executives and business travelers. Features panoramic city views, high-speed WiFi, and premium amenities.', 'Olaya District, Riyadh', 850, 4, 2, 2, '["WiFi", "Air Conditioning", "Kitchen", "Parking", "TV", "Gym", "Pool", "Concierge"]', '["https://images.unsplash.com/photo-1564013799919-ab600027ffc6?auto=format&fit=crop&w=800&h=600", "https://images.unsplash.com/photo-1560448204-e1a3ecbdd6cc?auto=format&fit=crop&w=800&h=600", "https://images.unsplash.com/photo-1571896349842-33c89424de2d?auto=format&fit=crop&w=800&h=600"]', 1, 1),
 
 ('owner2', 'Traditional Najdi Villa with Modern Amenities', 'Authentic Saudi experience in a beautifully restored traditional villa. Combines heritage architecture with modern comfort. Perfect for families and cultural enthusiasts.', 'Al-Diriyah, Riyadh', 1200, 8, 4, 3, '["WiFi", "Air Conditioning", "Kitchen", "Parking", "TV", "Traditional Decor", "Garden", "BBQ Area"]', '["https://images.unsplash.com/photo-1600880292203-757bb62b4baf?auto=format&fit=crop&w=800&h=600", "https://images.unsplash.com/photo-1590725175947-49d8c5c4bd8e?auto=format&fit=crop&w=800&h=600", "https://images.unsplash.com/photo-1449824913935-59a10b8d2000?auto=format&fit=crop&w=800&h=600"]', 1, 1),
@@ -14,10 +14,10 @@ INSERT INTO properties (user_id, title, description, location, price_per_night, 
 ('owner6', 'Modern Apartment in Al-Nakheel District', 'Contemporary 2-bedroom apartment perfect for business travelers and couples. Features modern amenities and easy access to major business centers and shopping malls.', 'Al-Nakheel, Riyadh', 650, 4, 2, 2, '["WiFi", "Air Conditioning", "Kitchen", "Parking", "TV", "Balcony", "Shopping Nearby"]', '["https://images.unsplash.com/photo-1560448075-bb485b067938?auto=format&fit=crop&w=800&h=600", "https://images.unsplash.com/photo-1567767292278-a4f21aa2d36e?auto=format&fit=crop&w=800&h=600"]', 0, 1);
 
 -- Insert sample bookings
-INSERT INTO bookings (user_id, property_id, guest_name, guest_email, guest_phone, check_in_date, check_out_date, total_guests, total_amount, status, payment_status) VALUES
-('guest1', 1, 'Ahmed Al-Hassan', 'ahmed.hassan@email.com', '+966501234567', '2024-12-28', '2024-12-31', 2, 2550, 'confirmed', 'paid'),
-('guest2', 2, 'Sarah Mitchell', 'sarah.mitchell@email.com', '+44987654321', '2025-01-05', '2025-01-10', 6, 6000, 'confirmed', 'paid'),
-('guest3', 1, 'Mohammad Al-Rashid', 'mohammad.rashid@email.com', '+966555123456', '2025-01-15', '2025-01-18', 4, 2550, 'pending', 'pending');
+INSERT INTO bookings (user_id, property_id, guest_name, guest_email, guest_phone, check_in_date, check_out_date, nights_count, guest_count, base_amount, service_fee, taxes, total_amount, status, payment_status) VALUES
+('guest1', 1, 'Ahmed Al-Hassan', 'ahmed.hassan@email.com', '+966501234567', '2024-12-28', '2024-12-31', 3, 2, 2550, 127, 382, 3059, 'confirmed', 'completed'),
+('guest2', 2, 'Sarah Mitchell', 'sarah.mitchell@email.com', '+44987654321', '2025-01-05', '2025-01-10', 5, 6, 6000, 300, 900, 7200, 'confirmed', 'completed'),
+('guest3', 1, 'Mohammad Al-Rashid', 'mohammad.rashid@email.com', '+966555123456', '2025-01-15', '2025-01-18', 3, 4, 2550, 127, 382, 3059, 'pending', 'pending');
 
 -- Insert sample reviews
 INSERT INTO reviews (user_id, property_id, booking_id, rating, comment) VALUES

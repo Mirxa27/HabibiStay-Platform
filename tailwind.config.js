@@ -5,7 +5,54 @@ export default {
     "./src/react-app/**/*.{js,ts,jsx,tsx}",
   ],
   theme: {
-    extend: {},
+    extend: {
+      colors: {
+        // HabibiStay Brand Colors
+        primary: {
+          50: '#eff6ff',
+          100: '#dbeafe', 
+          200: '#bfdbfe',
+          300: '#93c5fd',
+          400: '#60a5fa',
+          500: '#2957c3', // Main brand color
+          600: '#1e40af',
+          700: '#1d4ed8',
+          800: '#1e3a8a',
+          900: '#1e3a8a',
+          950: '#172554'
+        },
+        // Brand specific colors
+        brand: {
+          blue: '#2957c3',
+          'blue-dark': '#1e40af',
+          'blue-light': '#3b6cf7'
+        }
+      },
+      fontFamily: {
+        sans: ['Inter', 'system-ui', 'sans-serif']
+      },
+      boxShadow: {
+        'brand': '0 4px 14px 0 rgba(41, 87, 195, 0.15)',
+        'brand-lg': '0 10px 25px 0 rgba(41, 87, 195, 0.2)'
+      },
+      backgroundImage: {
+        'brand-gradient': 'linear-gradient(135deg, #2957c3 0%, #1e40af 100%)'
+      },
+      animation: {
+        'fade-in': 'fadeIn 0.5s ease-out',
+        'slide-up': 'slideUp 0.3s ease-out'
+      },
+      keyframes: {
+        fadeIn: {
+          '0%': { opacity: '0' },
+          '100%': { opacity: '1' }
+        },
+        slideUp: {
+          '0%': { transform: 'translateY(20px)', opacity: '0' },
+          '100%': { transform: 'translateY(0)', opacity: '1' }
+        }
+      }
+    },
   },
   plugins: [],
 };

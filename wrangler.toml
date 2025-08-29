@@ -1,0 +1,11 @@
+name = "habibistay"
+main = "src/worker/index.ts"
+compatibility_date = "2024-03-06"
+
+# Static assets directory required by wrangler dev (used for serving index.html, public files)
+assets = { directory = "./public" }
+
+[[d1_databases]]
+binding = "DB"
+database_name = "habibistay"
+database_id = "habibistay"

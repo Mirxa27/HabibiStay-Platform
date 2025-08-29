@@ -1,6 +1,7 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router';
 import { Mail, Phone, MapPin, Facebook, Twitter, Instagram, Linkedin } from 'lucide-react';
+import { responsiveClasses, containers, utils, cn } from '../utils/responsive';
 
 function NewsletterForm() {
   const [email, setEmail] = useState('');
@@ -48,19 +49,29 @@ function NewsletterForm() {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex gap-3">
+    <form onSubmit={handleSubmit} className={cn(
+      responsiveClasses.flex.columnToRow,
+      "gap-2 sm:gap-3"
+    )}>
       <input
         type="email"
         value={email}
         onChange={(e) => setEmail(e.target.value)}
         placeholder="Enter your email"
         required
-        className="flex-1 px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#2957c3] focus:border-transparent"
+        className={cn(
+          "flex-1 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-[#2957c3] focus:border-transparent",
+          responsiveClasses.form.input
+        )}
       />
       <button
         type="submit"
         disabled={isSubmitting || !email}
-        className="bg-[#2957c3] text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        className={cn(
+          "bg-[#2957c3] text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed",
+          responsiveClasses.button.secondary,
+          utils.touchTarget
+        )}
       >
         {isSubmitting ? 'Subscribing...' : 'Subscribe'}
       </button>
@@ -124,34 +135,46 @@ export default function Footer() {
 
   return (
     <footer className="bg-gray-900 text-white">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className={containers.page}>
         {/* Main Footer Content */}
-        <div className="py-16">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-8">
+        <div className={responsiveClasses.padding.section}>
+          <div className={cn(
+            "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-6 sm:gap-8"
+          )}>
             {/* Brand Section */}
             <div className="lg:col-span-2">
-              <div className="flex items-center space-x-2 mb-4">
+              <div className="flex items-center space-x-2 mb-3 sm:mb-4">
                 <img 
                   src="https://mocha-cdn.com/0198e085-9738-7b3f-a205-ec01ec5b130b/-logo.png" 
                   alt="HabibiStay" 
-                  className="h-8 w-8"
+                  className="h-6 w-6 sm:h-8 sm:w-8"
                 />
-                <span className="text-xl font-bold text-[#2957c3]">HabibiStay</span>
+                <span className={cn(
+                  "font-bold text-[#2957c3]",
+                  "text-lg sm:text-xl"
+                )}>HabibiStay</span>
               </div>
-              <p className="text-gray-400 mb-6 text-sm leading-relaxed">
+              <p className={cn(
+                responsiveClasses.text.small,
+                "text-gray-400 mb-4 sm:mb-6 leading-relaxed"
+              )}>
                 Your gateway to exceptional accommodations and smart real estate investments in Saudi Arabia. 
                 Building the future of hospitality with Vision 2030.
               </p>
               
               {/* Contact Info */}
-              <div className="space-y-3">
+              <div className="space-y-2 sm:space-y-3">
                 {contactInfo.map((item, index) => (
                   <a
                     key={index}
                     href={item.href}
-                    className="flex items-center text-gray-400 hover:text-white transition-colors text-sm"
+                    className={cn(
+                      "flex items-center text-gray-400 hover:text-white transition-colors",
+                      responsiveClasses.text.small,
+                      utils.touchTarget
+                    )}
                   >
-                    <item.icon className="h-4 w-4 mr-3" />
+                    <item.icon className="h-3 w-3 sm:h-4 sm:w-4 mr-2 sm:mr-3" />
                     {item.text}
                   </a>
                 ))}
@@ -160,13 +183,20 @@ export default function Footer() {
 
             {/* Company Links */}
             <div>
-              <h3 className="text-white font-semibold mb-4">Company</h3>
-              <ul className="space-y-3">
+              <h3 className={cn(
+                "text-white font-semibold mb-3 sm:mb-4",
+                responsiveClasses.text.small
+              )}>Company</h3>
+              <ul className="space-y-2 sm:space-y-3">
                 {footerLinks.company.map((link) => (
                   <li key={link.name}>
                     <Link
                       to={link.href}
-                      className="text-gray-400 hover:text-white transition-colors text-sm"
+                      className={cn(
+                        "text-gray-400 hover:text-white transition-colors",
+                        responsiveClasses.text.small,
+                        utils.touchTarget
+                      )}
                     >
                       {link.name}
                     </Link>
@@ -177,13 +207,20 @@ export default function Footer() {
 
             {/* Services Links */}
             <div>
-              <h3 className="text-white font-semibold mb-4">Services</h3>
-              <ul className="space-y-3">
+              <h3 className={cn(
+                "text-white font-semibold mb-3 sm:mb-4",
+                responsiveClasses.text.small
+              )}>Services</h3>
+              <ul className="space-y-2 sm:space-y-3">
                 {footerLinks.services.map((link) => (
                   <li key={link.name}>
                     <Link
                       to={link.href}
-                      className="text-gray-400 hover:text-white transition-colors text-sm"
+                      className={cn(
+                        "text-gray-400 hover:text-white transition-colors",
+                        responsiveClasses.text.small,
+                        utils.touchTarget
+                      )}
                     >
                       {link.name}
                     </Link>
@@ -194,8 +231,11 @@ export default function Footer() {
 
             {/* Support Links */}
             <div>
-              <h3 className="text-white font-semibold mb-4">Support</h3>
-              <ul className="space-y-3">
+              <h3 className={cn(
+                "text-white font-semibold mb-3 sm:mb-4",
+                responsiveClasses.text.small
+              )}>Support</h3>
+              <ul className="space-y-2 sm:space-y-3">
                 {footerLinks.support.map((link) => (
                   <li key={link.name}>
                     <Link

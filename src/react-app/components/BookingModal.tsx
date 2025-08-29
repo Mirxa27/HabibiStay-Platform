@@ -1,8 +1,9 @@
-import { useState } from 'react';
+import React, { useState } from 'react';
 import { X, User, Mail, Phone, MessageCircle, Calendar, Users } from 'lucide-react';
 import { useChat } from '@/react-app/contexts/ChatContext';
 import PaymentModal from './PaymentModal';
 import type { Property, Booking } from '@/shared/types';
+import { responsiveClasses, utils, cn } from '../utils/responsive';
 
 interface BookingModalProps {
   isOpen: boolean;
@@ -177,11 +178,17 @@ export default function BookingModal({ isOpen, onClose, property }: BookingModal
 
   return (
     <>
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-        <div className="bg-white rounded-xl max-w-md w-full p-6 max-h-[90vh] overflow-y-auto">
+      <div className={responsiveClasses.modal.overlay}>
+        <div className={cn(
+          responsiveClasses.modal.container,
+          "max-w-sm sm:max-w-md md:max-w-lg"
+        )}>
           {/* Header */}
-          <div className="flex justify-between items-center mb-6">
-            <h2 className="text-2xl font-bold text-gray-900">
+          <div className={responsiveClasses.modal.header}>
+            <h2 className={cn(
+              responsiveClasses.text.h3,
+              "text-gray-900"
+            )}>
               {step === 'form' ? 'Book Your Stay' : 'Booking Confirmation'}
             </h2>
             <button
@@ -189,15 +196,24 @@ export default function BookingModal({ isOpen, onClose, property }: BookingModal
                 onClose();
                 resetForm();
               }}
-              className="text-gray-400 hover:text-gray-600 transition-colors"
+              className={cn(
+                "text-gray-400 hover:text-gray-600 transition-colors",
+                utils.touchTarget
+              )}
             >
-              <X className="h-6 w-6" />
+              <X className="h-5 w-5 sm:h-6 sm:w-6" />
             </button>
           </div>
 
           {/* Property Info */}
-          <div className="bg-gray-50 rounded-lg p-4 mb-6">
-            <h3 className="font-semibold text-gray-900 mb-1">{property.title}</h3>
+          <div className={cn(
+            "bg-gray-50 rounded-lg mb-4 sm:mb-6",
+            responsiveClasses.card.padding
+          )}>
+            <h3 className={cn(
+              responsiveClasses.text.h4,
+              "text-gray-900 mb-1"
+            )}>{property.title}</h3>
             <p className="text-gray-600 text-sm">{property.location}</p>
             <p className="text-[#2957c3] font-bold mt-2">{property.price_per_night} SAR / night</p>
           </div>

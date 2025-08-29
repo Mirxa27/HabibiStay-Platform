@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router';
 import { useAuth } from '@getmocha/users-service/react';
 import { 
@@ -15,6 +15,7 @@ import {
   Edit3
 } from 'lucide-react';
 import type { Property, Booking } from '@/shared/types';
+import { responsiveClasses, containers, utils, cn } from '../utils/responsive';
 
 export default function DashboardPage() {
   const { user, redirectToLogin } = useAuth();
@@ -52,13 +53,26 @@ export default function DashboardPage() {
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className={cn(
+        "min-h-screen bg-gray-50",
+        responsiveClasses.flex.center
+      )}>
         <div className="text-center">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">Sign In Required</h2>
-          <p className="text-gray-600 mb-6">Please sign in to access your dashboard.</p>
+          <h2 className={cn(
+            responsiveClasses.text.h2,
+            "text-gray-900 mb-2 sm:mb-4"
+          )}>Sign In Required</h2>
+          <p className={cn(
+            responsiveClasses.text.body,
+            "text-gray-600 mb-4 sm:mb-6"
+          )}>Please sign in to access your dashboard.</p>
           <button
             onClick={redirectToLogin}
-            className="bg-[#2957c3] text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+            className={cn(
+              "bg-[#2957c3] text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors",
+              responsiveClasses.button.primary,
+              utils.touchTarget
+            )}
           >
             Sign In
           </button>
@@ -70,15 +84,21 @@ export default function DashboardPage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="animate-pulse space-y-6">
-            <div className="h-8 bg-gray-300 rounded w-1/4"></div>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className={containers.page}>
+          <div className={cn(
+            "animate-pulse space-y-4 sm:space-y-6",
+            responsiveClasses.padding.section
+          )}>
+            <div className="h-6 sm:h-8 bg-gray-300 rounded w-1/4"></div>
+            <div className={cn(
+              responsiveClasses.grid.quad,
+              "gap-4 sm:gap-6"
+            )}>
               {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="h-32 bg-gray-300 rounded-xl"></div>
+                <div key={i} className="h-24 sm:h-32 bg-gray-300 rounded-xl"></div>
               ))}
             </div>
-            <div className="h-96 bg-gray-300 rounded-xl"></div>
+            <div className="h-64 sm:h-96 bg-gray-300 rounded-xl"></div>
           </div>
         </div>
       </div>
@@ -128,18 +148,31 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className={containers.page}>
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">
+        <div className={cn(
+          responsiveClasses.padding.section,
+          "border-b pb-4 sm:pb-6 mb-6 sm:mb-8"
+        )}>
+          <h1 className={cn(
+            responsiveClasses.text.h1,
+            "text-gray-900 mb-1 sm:mb-2"
+          )}>
             Welcome back, {user.google_user_data.given_name || user.email}!
           </h1>
-          <p className="text-gray-600">Here's what's happening with your properties and investments.</p>
+          <p className={cn(
+            responsiveClasses.text.body,
+            "text-gray-600"
+          )}>Here's what's happening with your properties and investments.</p>
         </div>
 
         {/* Navigation Tabs */}
-        <div className="mb-8">
-          <nav className="flex space-x-8">
+        <div className="mb-6 sm:mb-8">
+          <nav className={cn(
+            "flex overflow-x-auto",
+            "gap-2 sm:gap-4 md:gap-8",
+            "pb-2 scrollbar-hide"
+          )}>
             {[
               { key: 'overview', label: 'Overview', icon: Home },
               { key: 'properties', label: 'Properties', icon: Home },
@@ -149,14 +182,17 @@ export default function DashboardPage() {
               <button
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key as any)}
-                className={`flex items-center px-3 py-2 border-b-2 font-medium text-sm ${
+                className={cn(
+                  "flex items-center border-b-2 font-medium whitespace-nowrap",
+                  responsiveClasses.button.secondary,
+                  utils.touchTarget,
                   activeTab === tab.key
                     ? 'border-[#2957c3] text-[#2957c3]'
                     : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                }`}
+                )}
               >
-                <tab.icon className="w-5 h-5 mr-2" />
-                {tab.label}
+                <tab.icon className="w-4 h-4 sm:w-5 sm:h-5 mr-1 sm:mr-2" />
+                <span className={responsiveClasses.text.small}>{tab.label}</span>
               </button>
             ))}
           </nav>
@@ -164,31 +200,49 @@ export default function DashboardPage() {
 
         {/* Overview Tab */}
         {activeTab === 'overview' && (
-          <div className="space-y-8">
+          <div className="space-y-6 sm:space-y-8">
             {/* Stats Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <div className={cn(
+              responsiveClasses.grid.quad,
+              "gap-4 sm:gap-6"
+            )}>
               {stats.map((stat, index) => (
-                <div key={index} className="bg-white p-6 rounded-xl shadow-sm">
-                  <div className="flex items-center justify-between">
+                <div key={index} className={cn(
+                  responsiveClasses.card.base,
+                  responsiveClasses.card.padding
+                )}>
+                  <div className={responsiveClasses.flex.between}>
                     <div>
-                      <p className="text-sm font-medium text-gray-600">{stat.title}</p>
-                      <p className="text-2xl font-bold text-gray-900">{stat.value}</p>
+                      <p className={cn(
+                        responsiveClasses.text.small,
+                        "font-medium text-gray-600 mb-1"
+                      )}>{stat.title}</p>
+                      <p className={cn(
+                        "text-xl sm:text-2xl font-bold text-gray-900"
+                      )}>{stat.value}</p>
                     </div>
-                    <div className={`p-3 rounded-full ${
+                    <div className={cn(
+                      "p-2 sm:p-3 rounded-full",
                       stat.positive ? 'bg-green-100' : 'bg-red-100'
-                    }`}>
-                      <stat.icon className={`w-6 h-6 ${
+                    )}>
+                      <stat.icon className={cn(
+                        "w-5 h-5 sm:w-6 sm:h-6",
                         stat.positive ? 'text-green-600' : 'text-red-600'
-                      }`} />
+                      )} />
                     </div>
                   </div>
-                  <div className="mt-4">
-                    <span className={`text-sm font-medium ${
+                  <div className="mt-3 sm:mt-4">
+                    <span className={cn(
+                      responsiveClasses.text.small,
+                      "font-medium",
                       stat.positive ? 'text-green-600' : 'text-red-600'
-                    }`}>
+                    )}>
                       {stat.change}
                     </span>
-                    <span className="text-sm text-gray-500 ml-1">from last month</span>
+                    <span className={cn(
+                      responsiveClasses.text.small,
+                      "text-gray-500 ml-1"
+                    )}>from last month</span>
                   </div>
                 </div>
               ))}
