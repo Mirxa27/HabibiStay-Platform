@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
-import type { ChatMessage, ChatButton, Property, CreateBookingData, AIResponse } from '@/shared/types';
+import type { ChatMessage, ChatButton, Property, CreateBooking } from '../../shared/types';
 
 // Extend global Window interface for speech recognition
 declare global {
@@ -15,7 +15,7 @@ interface ChatContextType {
   isLoading: boolean;
   conversationId: string | null;
   featuredProperties: Property[];
-  currentBooking: Partial<CreateBookingData> | null;
+  currentBooking: Partial<CreateBooking> | null;
   voiceEnabled: boolean;
   isListening: boolean;
   sendMessage: (content: string, action?: string) => Promise<void>;
@@ -25,7 +25,7 @@ interface ChatContextType {
   openChat: () => void;
   showPropertyCard: (property: Property) => void;
   initiateBooking: (propertyId: number) => void;
-  updateBookingData: (data: Partial<CreateBookingData>) => void;
+  updateBookingData: (data: Partial<CreateBooking>) => void;
   handleButtonClick: (button: ChatButton) => void;
   toggleVoice: () => void;
   startListening: () => void;
@@ -50,13 +50,13 @@ interface ChatProviderProps {
 const STORAGE_KEY = 'habibistay_chat_state';
 const CONVERSATION_TIMEOUT = 30 * 60 * 1000; // 30 minutes
 
-export default function ChatProvider({ children }: ChatProviderProps) {
+export function ChatProvider({ children }: ChatProviderProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [featuredProperties, setFeaturedProperties] = useState<Property[]>([]);
-  const [currentBooking, setCurrentBooking] = useState<Partial<CreateBookingData> | null>(null);
+  const [currentBooking, setCurrentBooking] = useState<Partial<CreateBooking> | null>(null);
   const [voiceEnabled, setVoiceEnabled] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [recognition, setRecognition] = useState<any>(null);
@@ -365,7 +365,7 @@ export default function ChatProvider({ children }: ChatProviderProps) {
     }
   }, [featuredProperties, addMessage]);
 
-  const updateBookingData = useCallback((data: Partial<CreateBookingData>) => {
+  const updateBookingData = useCallback((data: Partial<CreateBooking>) => {
     setCurrentBooking(prev => ({ ...prev, ...data }));
   }, []);
 
@@ -450,3 +450,6 @@ export default function ChatProvider({ children }: ChatProviderProps) {
     </ChatContext.Provider>
   );
 }
+
+// Default export for compatibility
+export default ChatProvider;

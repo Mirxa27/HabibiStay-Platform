@@ -1,0 +1,17 @@
+{
+  "user": {
+    "id": "admin-test-12345",
+    "email": "admin@habibistay.com",
+    "name": "HabibiStay Admin",
+    "role": "admin",
+    "avatar": "https://images.unsplash.com/photo-1472099645785-5658abf4ff4e?auto=format&fit=crop&w=300&h=300",
+    "phone": "+966-55-0800-669"
+  },
+  "tokens": {
+    "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbi10ZXN0LTEyMzQ1IiwiZW1haWwiOiJhZG1pbkBoYWJpYmlzdGF5LmNvbSIsIm5hbWUiOiJIYWJpYmlTdGF5IEFkbWluIiwicm9sZSI6ImFkbWluIiwic2Vzc2lvbklkIjoiYmE0ZDQ0MDg4NzkzNjEwNDcwMDgxNGQyYTFiYjkzMWYiLCJpYXQiOjE3NTY1MzQ5OTksImV4cCI6MTc1NjYyMTM5OSwiaXNzIjoiaGFiaWJpc3RheSIsImF1ZCI6ImhhYmliaXN0YXktYXBwIn0.9qJpUVYpJmaCsDOdaU9ugv7SxjAJan4LMgXHdB5heGs",
+    "refresh_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbi10ZXN0LTEyMzQ1Iiwic2Vzc2lvbklkIjoiYWYzNDYxYTc2OWM2Y2VmYjk5YjdjMmY1ZjQ5M2I3NjYiLCJ0b2tlblZlcnNpb24iOjEsImlhdCI6MTc1NjUzNDk5OSwiZXhwIjoxNzU5MTI2OTk5LCJpc3MiOiJoYWJpYmlzdGF5IiwiYXVkIjoiaGFiaWJpc3RheS1yZWZyZXNoIn0.wcZNVrHtixe2OVLWXfM9akGI7SpTUrlszUCXz1-pq_U",
+    "token_type": "Bearer",
+    "expires_in": 86400
+  },
+  "generated_at": "2025-08-30T06:23:19.952Z"
+}

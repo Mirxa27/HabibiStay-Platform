@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   MessageCircle, 
   X, 
@@ -24,8 +24,9 @@ import {
   Waves,
   Dumbbell
 } from 'lucide-react';
-import { useChat } from '@/react-app/contexts/ChatContext';
-import type { ChatMessage, ChatButton, Property } from '@/shared/types';
+import { useChat } from '../contexts/ChatContext';
+import type { ChatMessage, ChatButton, Property } from '../../shared/types';
+import { responsiveClasses, containers, imageSizes, utils, cn } from '../utils/responsive';
 import { clsx } from 'clsx';
 
 interface PropertyCardProps {
@@ -48,27 +49,44 @@ function PropertyCard({ property, onBook, onViewDetails }: PropertyCardProps) {
     (typeof property.amenities === 'string' ? JSON.parse(property.amenities || '[]') : []);
 
   return (
-    <div className="bg-white border border-gray-200 rounded-lg p-4 mb-3 shadow-sm">
+    <div className={cn(
+      responsiveClasses.card.base,
+      "border border-gray-200 rounded-lg mb-3 shadow-sm",
+      responsiveClasses.card.padding
+    )}>
       {/* Property Image */}
       {images.length > 0 && (
         <img 
           src={images[0]} 
           alt={property.title}
-          className="w-full h-32 object-cover rounded-lg mb-3"
+          className={cn(
+            imageSizes.property.card,
+            "rounded-lg mb-3"
+          )}
         />
       )}
       
       {/* Property Details */}
       <div className="space-y-2">
-        <h4 className="font-semibold text-gray-900 text-sm">{property.title}</h4>
+        <h4 className={cn(
+          "font-semibold text-gray-900",
+          responsiveClasses.text.small
+        )}>{property.title}</h4>
         
-        <div className="flex items-center text-xs text-gray-600">
+        <div className={cn(
+          "flex items-center",
+          responsiveClasses.text.small,
+          "text-gray-600"
+        )}>
           <MapPin className="h-3 w-3 mr-1" />
           <span>{property.location}</span>
         </div>
         
-        <div className="flex items-center justify-between text-xs">
-          <div className="flex items-center space-x-3">
+        <div className={cn(
+          "flex items-center justify-between",
+          responsiveClasses.text.small
+        )}>
+          <div className="flex items-center space-x-2 sm:space-x-3">
             <div className="flex items-center">
               <Bed className="h-3 w-3 mr-1 text-gray-500" />
               <span className="text-gray-600">{property.bedrooms}</span>
@@ -83,32 +101,35 @@ function PropertyCard({ property, onBook, onViewDetails }: PropertyCardProps) {
             </div>
           </div>
           
-          {property.average_rating && (
+          {(property as any).average_rating && (
             <div className="flex items-center">
               <Star className="h-3 w-3 text-yellow-400 fill-current mr-1" />
-              <span className="text-gray-600">{property.average_rating.toFixed(1)}</span>
+              <span className="text-gray-600">{(property as any).average_rating.toFixed(1)}</span>
             </div>
           )}
         </div>
         
         {/* Amenities */}
         {amenities.length > 0 && (
-          <div className="flex items-center space-x-2">
-            {amenities.slice(0, 4).map((amenity, index) => {
+          <div className="flex items-center space-x-1 sm:space-x-2">
+            {amenities.slice(0, 4).map((amenity: string, index: number) => {
               const IconComponent = amenityIcons[amenity];
               return IconComponent ? (
                 <IconComponent key={index} className="h-3 w-3 text-gray-400" />
               ) : null;
             })}
             {amenities.length > 4 && (
-              <span className="text-xs text-gray-500">+{amenities.length - 4} more</span>
+              <span className={cn(
+                responsiveClasses.text.small,
+                "text-gray-500"
+              )}>+{amenities.length - 4} more</span>
             )}
           </div>
         )}
         
         {/* Price and Actions */}
         <div className="flex items-center justify-between pt-2 border-t border-gray-100">
-          <div className="text-sm">
+          <div className={responsiveClasses.text.small}>
             <span className="font-semibold text-[#2957c3]">{property.price_per_night} SAR</span>
             <span className="text-gray-500"> / night</span>
           </div>
@@ -116,13 +137,21 @@ function PropertyCard({ property, onBook, onViewDetails }: PropertyCardProps) {
           <div className="flex space-x-1">
             <button
               onClick={() => onViewDetails(property.id)}
-              className="px-2 py-1 text-xs text-gray-600 hover:text-[#2957c3] transition-colors"
+              className={cn(
+                "px-2 py-1 text-gray-600 hover:text-[#2957c3] transition-colors",
+                responsiveClasses.text.small,
+                utils.touchTarget
+              )}
             >
               Details
             </button>
             <button
               onClick={() => onBook(property.id)}
-              className="px-3 py-1 text-xs bg-[#2957c3] text-white rounded hover:bg-blue-700 transition-colors"
+              className={cn(
+                "px-3 py-1 bg-[#2957c3] text-white rounded hover:bg-blue-700 transition-colors",
+                responsiveClasses.text.small,
+                utils.touchTarget
+              )}
             >
               Book
             </button>
@@ -175,7 +204,7 @@ interface MessageContentProps {
 }
 
 function MessageContent({ message, onButtonClick, onPropertyBook, onPropertyViewDetails }: MessageContentProps) {
-  const metadata = message.metadata || {};
+  const metadata = (message as any).metadata || {};
   
   return (
     <div className="space-y-3">

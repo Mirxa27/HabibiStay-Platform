@@ -12,7 +12,7 @@ import {
   DollarSign,
   Star
 } from 'lucide-react';
-import type { Property, CreateProperty } from '@/shared/types';
+import type { Property, CreateProperty } from '../../shared/types';
 
 export default function PropertyFormPage() {
   const { id } = useParams<{ id: string }>();

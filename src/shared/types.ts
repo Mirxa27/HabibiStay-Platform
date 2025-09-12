@@ -11,6 +11,7 @@ export const PropertySchema = z.object({
   max_guests: z.number(),
   bedrooms: z.number().nullable(),
   bathrooms: z.number().nullable(),
+  average_rating: z.number().min(0).max(5).nullable(),
   amenities: z.string().nullable(),
   images: z.string().nullable(),
   is_featured: z.boolean(),
@@ -104,6 +105,7 @@ export const ChatMessageSchema = z.object({
   role: z.enum(['user', 'assistant', 'system']),
   content: z.string(),
   timestamp: z.string().optional(),
+  metadata: z.any().optional(),
 });
 
 export const ChatRequestSchema = z.object({

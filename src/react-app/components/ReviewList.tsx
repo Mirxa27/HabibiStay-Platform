@@ -16,6 +16,11 @@ interface ReviewWithUser extends Review {
     name: string;
     avatar?: string;
   };
+  cleanliness_rating?: number;
+  communication_rating?: number;
+  location_rating?: number;
+  value_rating?: number;
+  helpful_count?: number;
 }
 
 const REVIEW_FILTERS = [

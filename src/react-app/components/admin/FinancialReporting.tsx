@@ -20,6 +20,8 @@ import {
   FileText,
   AlertTriangle
 } from 'lucide-react';
+import { LoadingState, NetworkError, Skeleton } from '../LoadingStates';
+import { apiRequest, useApiErrorHandler } from '../../utils/errorHandling';
 
 interface FinancialMetrics {
   total_revenue: number;
@@ -106,10 +108,12 @@ const PERIOD_OPTIONS = [
 
 export default function FinancialReporting() {
   const { user } = useAuth();
+  const { handleApiError } = useApiErrorHandler();
   const [metrics, setMetrics] = useState<FinancialMetrics | null>(null);
   const [breakdown, setBreakdown] = useState<RevenueBreakdown | null>(null);
   const [reports, setReports] = useState<FinancialReport[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [selectedPeriod, setSelectedPeriod] = useState('30d');
   const [customDateRange, setCustomDateRange] = useState({
     start: '',
@@ -125,6 +129,7 @@ export default function FinancialReporting() {
 
   const fetchFinancialData = async () => {
     setLoading(true);
+    setError(null);
     try {
       const params = new URLSearchParams({
         period: selectedPeriod,
@@ -134,23 +139,18 @@ export default function FinancialReporting() {
         })
       });
 
-      const [metricsRes, breakdownRes, reportsRes] = await Promise.all([
-        fetch(`/api/admin/financial/metrics?${params}`),
-        fetch(`/api/admin/financial/breakdown?${params}`),
-        fetch('/api/admin/financial/reports')
-      ]);
-
       const [metricsData, breakdownData, reportsData] = await Promise.all([
-        metricsRes.json(),
-        breakdownRes.json(),
-        reportsRes.json()
+        apiRequest(`/api/admin/financial/metrics?${params}`),
+        apiRequest(`/api/admin/financial/breakdown?${params}`),
+        apiRequest('/api/admin/financial/reports')
       ]);
 
       if (metricsData.success) setMetrics(metricsData.data);
       if (breakdownData.success) setBreakdown(breakdownData.data);
       if (reportsData.success) setReports(reportsData.data);
     } catch (error) {
-      console.error('Error fetching financial data:', error);
+      handleApiError(error, 'fetchFinancialData');
+      setError('Failed to load financial data. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -159,9 +159,8 @@ export default function FinancialReporting() {
   const generateReport = async (reportType: string) => {
     setGeneratingReport(true);
     try {
-      const response = await fetch('/api/admin/financial/generate-report', {
+      const data = await apiRequest('/api/admin/financial/generate-report', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           report_type: reportType,
           period: selectedPeriod,
@@ -172,7 +171,6 @@ export default function FinancialReporting() {
         })
       });
 
-      const data = await response.json();
       if (data.success) {
         await fetchFinancialData();
         setShowGenerateReport(false);
@@ -180,8 +178,8 @@ export default function FinancialReporting() {
         alert('Failed to generate report');
       }
     } catch (error) {
-      console.error('Error generating report:', error);
-      alert('Failed to generate report');
+      handleApiError(error, 'generateReport');
+      alert('Failed to generate report. Please try again.');
     } finally {
       setGeneratingReport(false);
     }
@@ -210,15 +208,42 @@ export default function FinancialReporting() {
 
   if (loading) {
     return (
-      <div className="p-6">
-        <div className="animate-pulse space-y-6">
-          <div className="h-8 bg-gray-300 rounded w-1/3"></div>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            {[1, 2, 3, 4].map(i => (
-              <div key={i} className="h-32 bg-gray-300 rounded"></div>
-            ))}
+      <div className="max-w-7xl mx-auto p-6 space-y-6">
+        <div className="flex items-center justify-between mb-6">
+          <div>
+            <Skeleton variant="text" width="300px" height={32} />
+            <Skeleton variant="text" width="400px" height={16} className="mt-2" />
+          </div>
+          <div className="flex items-center space-x-4">
+            <Skeleton variant="rectangular" width={160} height={40} />
+            <Skeleton variant="rectangular" width={150} height={40} />
+            <Skeleton variant="rectangular" width={40} height={40} />
           </div>
         </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          {[1, 2, 3, 4].map(i => (
+            <div key={i} className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 space-y-3">
+              <Skeleton variant="text" width="120px" height={16} />
+              <Skeleton variant="text" width="140px" height={32} />
+              <Skeleton variant="text" width="80px" height={16} />
+            </div>
+          ))}
+        </div>
+        
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {[1, 2, 3].map(i => (
+            <Skeleton key={i} variant="rectangular" className="h-32 rounded-xl" />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="max-w-7xl mx-auto p-6">
+        <NetworkError onRetry={fetchFinancialData} />
       </div>
     );
   }

@@ -14,14 +14,18 @@ import {
   Eye,
   Edit3
 } from 'lucide-react';
-import type { Property, Booking } from '@/shared/types';
+import type { Property, Booking } from '../../shared/types';
 import { responsiveClasses, containers, utils, cn } from '../utils/responsive';
+import { LoadingState, NetworkError, Skeleton } from '../components/LoadingStates';
+import { apiRequest, useApiErrorHandler } from '../utils/errorHandling';
 
 export default function DashboardPage() {
   const { user, redirectToLogin } = useAuth();
+  const { handleApiError } = useApiErrorHandler();
   const [properties, setProperties] = useState<Property[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'overview' | 'properties' | 'bookings' | 'earnings'>('overview');
 
   useEffect(() => {
@@ -34,18 +38,19 @@ export default function DashboardPage() {
 
   const fetchDashboardData = async () => {
     try {
-      const [propertiesRes, bookingsRes] = await Promise.all([
-        fetch('/api/properties/my-properties'),
-        fetch('/api/bookings/my-bookings')
+      setLoading(true);
+      setError(null);
+      
+      const [propertiesData, bookingsData] = await Promise.all([
+        apiRequest('/api/properties/my-properties'),
+        apiRequest('/api/bookings/my-bookings')
       ]);
-
-      const propertiesData = await propertiesRes.json();
-      const bookingsData = await bookingsRes.json();
 
       if (propertiesData.success) setProperties(propertiesData.data);
       if (bookingsData.success) setBookings(bookingsData.data);
     } catch (error) {
-      console.error('Error fetching dashboard data:', error);
+      handleApiError(error, 'fetchDashboardData');
+      setError('Failed to load dashboard data. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -86,19 +91,37 @@ export default function DashboardPage() {
       <div className="min-h-screen bg-gray-50">
         <div className={containers.page}>
           <div className={cn(
-            "animate-pulse space-y-4 sm:space-y-6",
+            "space-y-4 sm:space-y-6",
             responsiveClasses.padding.section
           )}>
-            <div className="h-6 sm:h-8 bg-gray-300 rounded w-1/4"></div>
+            <Skeleton variant="text" width="25%" height={32} />
             <div className={cn(
               responsiveClasses.grid.quad,
               "gap-4 sm:gap-6"
             )}>
               {[1, 2, 3, 4].map((i) => (
-                <div key={i} className="h-24 sm:h-32 bg-gray-300 rounded-xl"></div>
+                <div key={i} className="bg-white rounded-xl p-4 sm:p-6 space-y-3">
+                  <Skeleton variant="circular" width={40} height={40} />
+                  <Skeleton variant="text" width="60%" />
+                  <Skeleton variant="text" width="40%" height={24} />
+                </div>
               ))}
             </div>
-            <div className="h-64 sm:h-96 bg-gray-300 rounded-xl"></div>
+            <Skeleton variant="rectangular" className="h-64 sm:h-96 rounded-xl" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className={containers.page}>
+          <div className={responsiveClasses.padding.section}>
+            <NetworkError 
+              onRetry={fetchDashboardData}
+            />
           </div>
         </div>
       </div>

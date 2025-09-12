@@ -95,6 +95,24 @@ export const responsiveClasses = {
     header: 'flex justify-between items-center p-4 sm:p-6 border-b',
     body: 'p-4 sm:p-6',
     footer: 'flex flex-col sm:flex-row justify-end gap-2 sm:gap-4 p-4 sm:p-6 border-t'
+  },
+  
+  // Mobile-specific components
+  mobile: {
+    drawer: 'fixed bottom-0 left-0 right-0 bg-white rounded-t-xl shadow-2xl transform transition-transform duration-300 ease-out max-h-[90vh] overflow-hidden',
+    bottomSheet: 'fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-2xl p-4 max-h-[80vh] overflow-y-auto',
+    pullHandle: 'w-12 h-1 bg-gray-300 rounded-full mx-auto mb-4',
+    fab: 'fixed bottom-6 right-6 w-14 h-14 bg-[#2957c3] text-white rounded-full shadow-lg flex items-center justify-center z-40 active:scale-95 transition-transform',
+    stickyHeader: 'sticky top-0 bg-white/95 backdrop-blur-sm border-b border-gray-100 z-30',
+    swipeIndicator: 'relative overflow-hidden after:absolute after:bottom-0 after:left-1/2 after:transform after:-translate-x-1/2 after:w-8 after:h-1 after:bg-gray-300 after:rounded-full'
+  },
+  
+  // Touch and gesture optimizations
+  touch: {
+    area: 'min-h-[44px] min-w-[44px] flex items-center justify-center',
+    ripple: 'relative overflow-hidden active:before:absolute active:before:inset-0 active:before:bg-black active:before:opacity-10 active:before:animate-ping',
+    press: 'active:scale-95 transition-transform duration-150',
+    scroll: 'overflow-auto -webkit-overflow-scrolling-touch'
   }
 };
 
@@ -131,18 +149,33 @@ export const utils = {
   // Screen reader utilities
   srOnly: 'sr-only',
   
-  // Touch targets (minimum 44px)
-  touchTarget: 'min-h-[44px] min-w-[44px]',
+  // Touch targets (minimum 44px for accessibility)
+  touchTarget: 'min-h-[44px] min-w-[44px] flex items-center justify-center',
+  touchButton: 'min-h-[44px] min-w-[44px] flex items-center justify-center touch-manipulation',
   
-  // Safe areas for mobile
+  // Mobile-specific interactions
+  noScrollbar: 'scrollbar-hide',
+  smoothScroll: 'scroll-smooth',
+  overscrollBehavior: 'overscroll-contain',
+  
+  // Safe areas for mobile (iOS notch support)
   safeTop: 'pt-safe-top',
-  safeBottom: 'pb-safe-bottom'
+  safeBottom: 'pb-safe-bottom',
+  safeLeft: 'pl-safe-left',
+  safeRight: 'pr-safe-right',
+  
+  // Mobile-optimized focus states
+  focusVisible: 'focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2957c3] focus-visible:ring-offset-2',
+  
+  // Performance optimizations
+  willChange: 'will-change-transform',
+  backfaceVisibility: 'backface-visibility-hidden'
 };
 
 // Responsive hook for JavaScript
 export const useResponsive = () => {
   const getScreenSize = (): 'sm' | 'md' | 'lg' | 'xl' | '2xl' => {
-    if (typeof window === 'undefined') return 'md';
+    if (typeof window === 'undefined') return 'md'; // Return 'md' for server-side rendering
     
     const width = window.innerWidth;
     if (width >= 1536) return '2xl';
@@ -166,12 +199,40 @@ export const useResponsive = () => {
     if (typeof window === 'undefined') return false;
     return window.innerWidth >= 1024;
   };
+  
+  const isTouchDevice = (): boolean => {
+    if (typeof window === 'undefined') return false;
+    return 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+  };
+  
+  const getOrientation = (): 'portrait' | 'landscape' => {
+    if (typeof window === 'undefined') return 'portrait';
+    return window.innerHeight > window.innerWidth ? 'portrait' : 'landscape';
+  };
+  
+  const hasNotch = (): boolean => {
+    if (typeof window === 'undefined') return false;
+    // Check for iPhone X and newer with notch
+    return window.screen.height === 812 && window.screen.width === 375 ||
+           window.screen.height === 896 && window.screen.width === 414 ||
+           window.screen.height === 844 && window.screen.width === 390 ||
+           window.screen.height === 926 && window.screen.width === 428;
+  };
+  
+  const canHover = (): boolean => {
+    if (typeof window === 'undefined') return true;
+    return window.matchMedia('(hover: hover)').matches;
+  };
 
   return {
     getScreenSize,
     isMobile,
     isTablet,
-    isDesktop
+    isDesktop,
+    isTouchDevice,
+    getOrientation,
+    hasNotch,
+    canHover
   };
 };
 
@@ -186,4 +247,51 @@ export const truncateClasses = {
   lines2: 'line-clamp-2',
   lines3: 'line-clamp-3',
   responsive: 'line-clamp-2 sm:line-clamp-3 md:line-clamp-4'
+};
+
+// Responsive spacing helpers
+export const spacing = {
+  xs: 'gap-1 sm:gap-2',
+  sm: 'gap-2 sm:gap-3 md:gap-4',
+  md: 'gap-3 sm:gap-4 md:gap-6',
+  lg: 'gap-4 sm:gap-6 md:gap-8',
+  xl: 'gap-6 sm:gap-8 md:gap-12'
+};
+
+// Animation utilities for mobile
+export const animations = {
+  slideUp: 'animate-slide-up',
+  slideDown: 'animate-slide-down',
+  fadeIn: 'animate-fade-in',
+  scaleIn: 'animate-scale-in',
+  bounce: 'animate-bounce-in'
+};
+
+// Helper functions for responsive design
+export const helpers = {
+  // Generate responsive classes based on screen size
+  responsive: (base: string, sm?: string, md?: string, lg?: string, xl?: string) => {
+    const classes = [base];
+    if (sm) classes.push(`sm:${sm}`);
+    if (md) classes.push(`md:${md}`);
+    if (lg) classes.push(`lg:${lg}`);
+    if (xl) classes.push(`xl:${xl}`);
+    return classes.join(' ');
+  },
+  
+  // Get optimal image size for current screen
+  getImageSize: (mobile: string, tablet: string, desktop: string) => {
+    return `${mobile} md:${tablet} lg:${desktop}`;
+  },
+  
+  // Generate touch-friendly button classes
+  touchButton: (variant: 'primary' | 'secondary' | 'ghost' = 'primary') => {
+    const base = 'min-h-[44px] min-w-[44px] flex items-center justify-center font-semibold rounded-lg transition-all duration-200 active:scale-95';
+    const variants = {
+      primary: 'bg-[#2957c3] text-white hover:bg-blue-700',
+      secondary: 'bg-gray-100 text-gray-700 hover:bg-gray-200',
+      ghost: 'text-gray-700 hover:bg-gray-100'
+    };
+    return `${base} ${variants[variant]}`;
+  }
 };

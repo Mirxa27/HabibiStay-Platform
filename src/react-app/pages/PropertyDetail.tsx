@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router';
 import { useAuth } from '@getmocha/users-service/react';
 import { 
@@ -23,7 +23,10 @@ import {
   Phone,
   Mail
 } from 'lucide-react';
-import type { Property, Review, CreateBooking } from '@/shared/types';
+import type { Property, Review, CreateBooking } from '../../shared/types';
+import { responsiveClasses, containers, imageSizes, utils, cn } from '../utils/responsive';
+import { LoadingState, NetworkError, Skeleton } from '../components/LoadingStates';
+import { apiRequest, useApiErrorHandler } from '../utils/errorHandling';
 
 interface PropertyDetailData extends Property {
   reviews: Review[];
@@ -48,11 +51,13 @@ const AMENITY_ICONS = {
   'Heating': Shield,
 };
 
-export default function PropertyDetail() {
+export default function PropertyDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { user } = useAuth();
+  const { handleApiError } = useApiErrorHandler();
   const [property, setProperty] = useState<PropertyDetailData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isWishlisted, setIsWishlisted] = useState(false);
   const [showBookingForm, setShowBookingForm] = useState(false);
@@ -79,8 +84,9 @@ export default function PropertyDetail() {
 
   const fetchPropertyDetails = async () => {
     try {
-      const response = await fetch(`/api/properties/${id}`);
-      const data = await response.json();
+      setLoading(true);
+      setError(null);
+      const data = await apiRequest(`/api/properties/${id}`);
       
       if (data.success) {
         setProperty(data.data);
@@ -92,7 +98,8 @@ export default function PropertyDetail() {
         }));
       }
     } catch (error) {
-      console.error('Error fetching property details:', error);
+      handleApiError(error, 'fetchPropertyDetails');
+      setError('Failed to load property details. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -100,15 +107,15 @@ export default function PropertyDetail() {
 
   const checkWishlistStatus = async () => {
     try {
-      const response = await fetch('/api/wishlist');
-      const data = await response.json();
+      const data = await apiRequest('/api/wishlist');
       
       if (data.success) {
         const isInWishlist = data.data.some((item: any) => item.property_id === parseInt(id || '0'));
         setIsWishlisted(isInWishlist);
       }
     } catch (error) {
-      console.error('Error checking wishlist status:', error);
+      handleApiError(error, 'checkWishlistStatus');
+      // Silently fail for wishlist status - not critical
     }
   };
 
@@ -120,13 +127,11 @@ export default function PropertyDetail() {
 
     try {
       const method = isWishlisted ? 'DELETE' : 'POST';
-      const response = await fetch(`/api/wishlist/${id}`, { method });
-      
-      if (response.ok) {
-        setIsWishlisted(!isWishlisted);
-      }
+      await apiRequest(`/api/wishlist/${id}`, { method });
+      setIsWishlisted(!isWishlisted);
     } catch (error) {
-      console.error('Error updating wishlist:', error);
+      handleApiError(error, 'toggleWishlist');
+      alert('Failed to update wishlist. Please try again.');
     }
   };
 
@@ -138,13 +143,10 @@ export default function PropertyDetail() {
 
     setBookingLoading(true);
     try {
-      const response = await fetch('/api/bookings', {
+      const data = await apiRequest('/api/bookings', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(booking),
       });
-
-      const data = await response.json();
       
       if (data.success) {
         alert('Booking request submitted successfully!');
@@ -153,8 +155,8 @@ export default function PropertyDetail() {
         alert(data.error || 'Failed to submit booking');
       }
     } catch (error) {
-      console.error('Error submitting booking:', error);
-      alert('Failed to submit booking');
+      handleApiError(error, 'handleBooking');
+      alert('Failed to submit booking. Please try again.');
     } finally {
       setBookingLoading(false);
     }
@@ -178,17 +180,42 @@ export default function PropertyDetail() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <div className="animate-pulse space-y-6">
-            <div className="h-96 bg-gray-300 rounded-xl"></div>
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              <div className="lg:col-span-2 space-y-6">
-                <div className="h-8 bg-gray-300 rounded w-3/4"></div>
-                <div className="h-4 bg-gray-300 rounded w-1/2"></div>
-                <div className="h-32 bg-gray-300 rounded"></div>
+        <div className={containers.page}>
+          <div className={cn(
+            "space-y-4 sm:space-y-6",
+            responsiveClasses.padding.section
+          )}>
+            <Skeleton variant="rectangular" className="h-64 sm:h-80 md:h-96 rounded-xl" />
+            <div className={cn(
+              "grid grid-cols-1 lg:grid-cols-3",
+              "gap-4 sm:gap-6 lg:gap-8"
+            )}>
+              <div className="lg:col-span-2 space-y-4 sm:space-y-6">
+                <Skeleton variant="text" width="75%" height={32} />
+                <Skeleton variant="text" width="50%" height={16} />
+                <Skeleton variant="rectangular" className="h-24 sm:h-32 rounded" />
+                <div className="space-y-2">
+                  <Skeleton variant="text" lines={3} />
+                </div>
               </div>
-              <div className="h-96 bg-gray-300 rounded-xl"></div>
+              <div className="space-y-4">
+                <Skeleton variant="rectangular" className="h-64 sm:h-80 md:h-96 rounded-xl" />
+              </div>
             </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="min-h-screen bg-gray-50">
+        <div className={containers.page}>
+          <div className={responsiveClasses.padding.section}>
+            <NetworkError 
+              onRetry={fetchPropertyDetails}
+            />
           </div>
         </div>
       </div>
@@ -197,30 +224,32 @@ export default function PropertyDetail() {
 
   if (!property) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <h2 className="text-2xl font-bold text-gray-900 mb-4">Property Not Found</h2>
-          <p className="text-gray-600 mb-6">The property you're looking for doesn't exist.</p>
-          <Link
-            to="/properties"
-            className="bg-[#2957c3] text-white px-6 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
-          >
-            Browse Properties
-          </Link>
+      <div className="min-h-screen bg-gray-50">
+        <div className={containers.page}>
+          <div className={responsiveClasses.padding.section}>
+            <NetworkError 
+              onRetry={fetchPropertyDetails}
+            />
+          </div>
         </div>
       </div>
     );
   }
+
 
   const images = property.images ? JSON.parse(property.images) : [];
   const amenities = property.amenities ? JSON.parse(property.amenities) : [];
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div className={containers.page}>
         {/* Breadcrumb */}
-        <nav className="mb-6">
-          <div className="flex items-center space-x-2 text-sm text-gray-600">
+        <nav className={cn("mb-4 sm:mb-6", responsiveClasses.padding.page)}>
+          <div className={cn(
+            "flex items-center space-x-2",
+            responsiveClasses.text.small,
+            "text-gray-600"
+          )}>
             <Link to="/properties" className="hover:text-[#2957c3]">Properties</Link>
             <span>/</span>
             <span className="text-gray-900">{property.title}</span>
@@ -228,37 +257,47 @@ export default function PropertyDetail() {
         </nav>
 
         {/* Image Gallery */}
-        <div className="mb-8">
+        <div className={cn("mb-6 sm:mb-8", responsiveClasses.padding.page)}>
           <div className="relative rounded-xl overflow-hidden">
             {images.length > 0 ? (
               <>
                 <img
                   src={images[currentImageIndex]}
                   alt={property.title}
-                  className="w-full h-96 object-cover"
+                  className={cn(
+                    "w-full object-cover",
+                    "h-48 sm:h-64 md:h-80 lg:h-96"
+                  )}
                 />
                 {images.length > 1 && (
                   <>
                     <button
                       onClick={() => setCurrentImageIndex(prev => prev > 0 ? prev - 1 : images.length - 1)}
-                      className="absolute left-4 top-1/2 transform -translate-y-1/2 bg-white/80 hover:bg-white p-2 rounded-full shadow-sm"
+                      className={cn(
+                        "absolute left-2 sm:left-4 top-1/2 transform -translate-y-1/2 bg-white/80 hover:bg-white p-1.5 sm:p-2 rounded-full shadow-sm",
+                        utils.touchTarget
+                      )}
                     >
-                      <ChevronLeft className="w-5 h-5" />
+                      <ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5" />
                     </button>
                     <button
                       onClick={() => setCurrentImageIndex(prev => prev < images.length - 1 ? prev + 1 : 0)}
-                      className="absolute right-4 top-1/2 transform -translate-y-1/2 bg-white/80 hover:bg-white p-2 rounded-full shadow-sm"
+                      className={cn(
+                        "absolute right-2 sm:right-4 top-1/2 transform -translate-y-1/2 bg-white/80 hover:bg-white p-1.5 sm:p-2 rounded-full shadow-sm",
+                        utils.touchTarget
+                      )}
                     >
-                      <ChevronRight className="w-5 h-5" />
+                      <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />
                     </button>
-                    <div className="absolute bottom-4 left-1/2 transform -translate-x-1/2 flex space-x-2">
+                    <div className="absolute bottom-2 sm:bottom-4 left-1/2 transform -translate-x-1/2 flex space-x-1 sm:space-x-2">
                       {images.map((_: any, index: number) => (
                         <button
                           key={index}
                           onClick={() => setCurrentImageIndex(index)}
-                          className={`w-2 h-2 rounded-full ${
+                          className={cn(
+                            "w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full transition-colors",
                             index === currentImageIndex ? 'bg-white' : 'bg-white/50'
-                          }`}
+                          )}
                         />
                       ))}
                     </div>
@@ -266,22 +305,27 @@ export default function PropertyDetail() {
                 )}
               </>
             ) : (
-              <div className="w-full h-96 bg-gray-200 flex items-center justify-center">
-                <span className="text-gray-500">No images available</span>
+              <div className={cn(
+                "w-full bg-gray-200 flex items-center justify-center text-gray-500",
+                "h-48 sm:h-64 md:h-80 lg:h-96"
+              )}>
+                <span className={responsiveClasses.text.small}>No images available</span>
               </div>
             )}
           </div>
           
           {/* Thumbnail strip */}
           {images.length > 1 && (
-            <div className="flex space-x-2 mt-4 overflow-x-auto">
+            <div className="flex space-x-1 sm:space-x-2 mt-3 sm:mt-4 overflow-x-auto scrollbar-hide">
               {images.map((image: string, index: number) => (
                 <button
                   key={index}
                   onClick={() => setCurrentImageIndex(index)}
-                  className={`flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border-2 ${
+                  className={cn(
+                    "flex-shrink-0 rounded-lg overflow-hidden border-2 transition-colors",
+                    "w-12 h-12 sm:w-16 sm:h-16 md:w-20 md:h-20",
                     index === currentImageIndex ? 'border-[#2957c3]' : 'border-transparent'
-                  }`}
+                  )}
                 >
                   <img
                     src={image}
@@ -294,21 +338,36 @@ export default function PropertyDetail() {
           )}
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className={cn(
+          "grid grid-cols-1 lg:grid-cols-3",
+          "gap-6 sm:gap-8",
+          responsiveClasses.padding.page
+        )}>
           {/* Property Details */}
-          <div className="lg:col-span-2 space-y-8">
+          <div className={cn(
+            "lg:col-span-2 space-y-6 sm:space-y-8"
+          )}>
             {/* Header */}
             <div>
-              <div className="flex items-start justify-between mb-4">
-                <div>
-                  <h1 className="text-3xl font-bold text-gray-900 mb-2">{property.title}</h1>
-                  <div className="flex items-center space-x-4 text-gray-600">
+              <div className={cn(
+                "flex flex-col sm:flex-row items-start justify-between mb-3 sm:mb-4",
+                "space-y-3 sm:space-y-0"
+              )}>
+                <div className="flex-1">
+                  <h1 className={cn(
+                    responsiveClasses.text.h2,
+                    "text-gray-900 mb-2"
+                  )}>{property.title}</h1>
+                  <div className={cn(
+                    "flex flex-col sm:flex-row items-start sm:items-center space-y-1 sm:space-y-0 sm:space-x-4 text-gray-600",
+                    responsiveClasses.text.small
+                  )}>
                     <div className="flex items-center">
-                      <MapPin className="w-4 h-4 mr-1" />
+                      <MapPin className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
                       <span>{property.location}</span>
                     </div>
                     <div className="flex items-center">
-                      <Star className="w-4 h-4 mr-1 text-yellow-400 fill-current" />
+                      <Star className="w-3 h-3 sm:w-4 sm:h-4 mr-1 text-yellow-400 fill-current" />
                       <span>{property.avg_rating || 0} ({property.review_count || 0} reviews)</span>
                     </div>
                   </div>
@@ -316,31 +375,45 @@ export default function PropertyDetail() {
                 <div className="flex items-center space-x-2">
                   <button
                     onClick={toggleWishlist}
-                    className={`p-2 rounded-full ${isWishlisted ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-600'} hover:bg-opacity-80`}
+                    className={cn(
+                      utils.touchTarget,
+                      "p-2 rounded-full transition-colors",
+                      isWishlisted ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-600',
+                      "hover:bg-opacity-80"
+                    )}
                   >
-                    <Heart className={`w-5 h-5 ${isWishlisted ? 'fill-current' : ''}`} />
+                    <Heart className={cn(
+                      "w-4 h-4 sm:w-5 sm:h-5",
+                      isWishlisted ? 'fill-current' : ''
+                    )} />
                   </button>
-                  <button className="p-2 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200">
-                    <Share2 className="w-5 h-5" />
+                  <button className={cn(
+                    utils.touchTarget,
+                    "p-2 rounded-full bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
+                  )}>
+                    <Share2 className="w-4 h-4 sm:w-5 sm:h-5" />
                   </button>
                 </div>
               </div>
 
               {/* Property specs */}
-              <div className="flex items-center space-x-6 text-gray-600">
+              <div className={cn(
+                "flex flex-wrap items-center gap-3 sm:gap-6 text-gray-600",
+                responsiveClasses.text.small
+              )}>
                 <div className="flex items-center">
-                  <Users className="w-4 h-4 mr-1" />
+                  <Users className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
                   <span>{property.max_guests} guests</span>
                 </div>
                 {property.bedrooms && (
                   <div className="flex items-center">
-                    <Bed className="w-4 h-4 mr-1" />
+                    <Bed className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
                     <span>{property.bedrooms} bedrooms</span>
                   </div>
                 )}
                 {property.bathrooms && (
                   <div className="flex items-center">
-                    <Bath className="w-4 h-4 mr-1" />
+                    <Bath className="w-3 h-3 sm:w-4 sm:h-4 mr-1" />
                     <span>{property.bathrooms} bathrooms</span>
                   </div>
                 )}
@@ -349,22 +422,37 @@ export default function PropertyDetail() {
 
             {/* Description */}
             <div>
-              <h2 className="text-xl font-bold text-gray-900 mb-4">About this place</h2>
-              <p className="text-gray-700 leading-relaxed">
+              <h2 className={cn(
+                responsiveClasses.text.h3,
+                "text-gray-900 mb-3 sm:mb-4"
+              )}>About this place</h2>
+              <p className={cn(
+                responsiveClasses.text.body,
+                "text-gray-700 leading-relaxed"
+              )}>
                 {property.description || "Experience luxury and comfort in this beautiful property located in the heart of Riyadh. Perfect for both business and leisure travelers, this accommodation offers modern amenities and exceptional service."}
               </p>
             </div>
 
             {/* Amenities */}
             <div>
-              <h2 className="text-xl font-bold text-gray-900 mb-4">Amenities</h2>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              <h2 className={cn(
+                responsiveClasses.text.h3,
+                "text-gray-900 mb-3 sm:mb-4"
+              )}>Amenities</h2>
+              <div className={cn(
+                "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3",
+                "gap-3 sm:gap-4"
+              )}>
                 {amenities.map((amenity: string, index: number) => {
                   const IconComponent = AMENITY_ICONS[amenity as keyof typeof AMENITY_ICONS] || Shield;
                   return (
                     <div key={index} className="flex items-center space-x-2">
-                      <IconComponent className="w-5 h-5 text-[#2957c3]" />
-                      <span className="text-gray-700">{amenity}</span>
+                      <IconComponent className="w-4 h-4 sm:w-5 sm:h-5 text-[#2957c3]" />
+                      <span className={cn(
+                        responsiveClasses.text.small,
+                        "text-gray-700"
+                      )}>{amenity}</span>
                     </div>
                   );
                 })}
@@ -372,18 +460,31 @@ export default function PropertyDetail() {
             </div>
 
             {/* Host Information */}
-            <div className="bg-white p-6 rounded-xl shadow-sm">
-              <h2 className="text-xl font-bold text-gray-900 mb-4">Meet your host</h2>
-              <div className="flex items-center space-x-4">
-                <div className="w-16 h-16 bg-[#2957c3] rounded-full flex items-center justify-center">
+            <div className={cn(
+              responsiveClasses.card.base,
+              responsiveClasses.card.padding
+            )}>
+              <h2 className={cn(
+                responsiveClasses.text.h3,
+                "text-gray-900 mb-3 sm:mb-4"
+              )}>Meet your host</h2>
+              <div className={cn(
+                "flex flex-col sm:flex-row items-start sm:items-center space-y-3 sm:space-y-0 sm:space-x-4"
+              )}>
+                <div className={cn(
+                  "w-12 h-12 sm:w-16 sm:h-16 bg-[#2957c3] rounded-full flex items-center justify-center flex-shrink-0"
+                )}>
                   {property.host_avatar ? (
                     <img
                       src={property.host_avatar}
                       alt={property.host_name}
-                      className="w-16 h-16 rounded-full object-cover"
+                      className="w-full h-full rounded-full object-cover"
                     />
                   ) : (
-                    <span className="text-white font-semibold text-lg">
+                    <span className={cn(
+                      "text-white font-semibold",
+                      "text-sm sm:text-lg"
+                    )}>
                       {property.host_name?.charAt(0) || 'H'}
                     </span>
                   )}
@@ -414,10 +515,10 @@ export default function PropertyDetail() {
                         <div className="flex items-center space-x-2">
                           <div className="w-8 h-8 bg-[#2957c3] rounded-full flex items-center justify-center">
                             <span className="text-white text-sm font-semibold">
-                              {review.reviewer_name?.charAt(0) || 'U'}
+                              {(review as any).reviewer_name?.charAt(0) || 'U'}
                             </span>
                           </div>
-                          <span className="font-medium text-gray-900">{review.reviewer_name || 'Anonymous'}</span>
+                          <span className="font-medium text-gray-900">{(review as any).reviewer_name || 'Anonymous'}</span>
                         </div>
                         <div className="flex items-center">
                           {[...Array(5)].map((_, i) => (

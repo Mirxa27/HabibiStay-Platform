@@ -42,17 +42,18 @@ export function sanitizeHtml(input: string): string {
   if (typeof input !== 'string') return '';
   
   return input
-    .replace(/</g, '<')
-    .replace(/>/g, '>')
-    .replace(/"/g, '"')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
     .replace(/'/g, '&#x27;')
     .replace(/\//g, '&#x2F;');
 }
 
 export function sanitizeFilename(filename: string): string {
   return filename
-    .replace(/[^a-zA-Z0-9.-]/g, '_')
-    .replace(/_{2,}/g, '_')
+    .replace(/[^a-zA-Z0-9.\-_]/g, '_')
+    .replace(/_{2,}/g, '_______')
     .substring(0, 255);
 }
 
@@ -126,11 +127,17 @@ export class CSRFProtection {
   private tokens = new Map<string, { token: string; expiry: number }>();
   
   generateToken(sessionId: string): string {
-    const token = crypto.randomUUID();
+    // Generate a proper UUID v4
+    const uuid = 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+      const r = Math.random() * 16 | 0;
+      const v = c == 'x' ? r : (r & 0x3 | 0x8);
+      return v.toString(16);
+    });
+    
     const expiry = Date.now() + (60 * 60 * 1000); // 1 hour
     
-    this.tokens.set(sessionId, { token, expiry });
-    return token;
+    this.tokens.set(sessionId, { token: uuid, expiry });
+    return uuid;
   }
 
   validateToken(sessionId: string, token: string): boolean {
@@ -156,7 +163,7 @@ export class CSRFProtection {
 // Password hashing utilities
 export async function hashPassword(password: string): Promise<string> {
   const encoder = new TextEncoder();
-  const data = encoder.encode(password + process.env.SALT || 'habibi-stay-salt');
+  const data = encoder.encode(password + (process.env.SALT || 'habibi-stay-salt'));
   const hashBuffer = await crypto.subtle.digest('SHA-256', data);
   const hashArray = Array.from(new Uint8Array(hashBuffer));
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
@@ -187,12 +194,28 @@ export async function createJWT(payload: Omit<JWTPayload, 'iat' | 'exp'>): Promi
     exp: now + (24 * 60 * 60) // 24 hours
   };
 
-  const encodedHeader = btoa(JSON.stringify(header));
-  const encodedPayload = btoa(JSON.stringify(fullPayload));
+  const encodedHeader = base64urlEncode(JSON.stringify(header));
+  const encodedPayload = base64urlEncode(JSON.stringify(fullPayload));
   
   const signature = await signHMAC(`${encodedHeader}.${encodedPayload}`);
+  const encodedSignature = base64urlEncode(signature);
   
-  return `${encodedHeader}.${encodedPayload}.${signature}`;
+  return `${encodedHeader}.${encodedPayload}.${encodedSignature}`;
+}
+
+// Helper function for base64url encoding
+function base64urlEncode(str: string): string {
+  return btoa(str)
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=/g, '');
+}
+
+// Helper function for base64url decoding
+function base64urlDecode(str: string): string {
+  // Add padding if needed
+  const padded = str + '='.repeat((4 - str.length % 4) % 4);
+  return atob(padded.replace(/-/g, '+').replace(/_/g, '/'));
 }
 
 // verifyJWT now accepts optional verification options but will perform basic checks
@@ -205,10 +228,11 @@ export async function verifyJWT(token: string, _options?: { issuer?: string; aud
     
     // Verify signature
     const expectedSignature = await signHMAC(`${encodedHeader}.${encodedPayload}`);
-    if (signature !== expectedSignature) return null;
+    const encodedExpectedSignature = base64urlEncode(expectedSignature);
+    if (signature !== encodedExpectedSignature) return null;
 
     // Decode payload
-    const payload = JSON.parse(atob(encodedPayload)) as JWTPayload;
+    const payload = JSON.parse(base64urlDecode(encodedPayload)) as JWTPayload;
     
     // Check expiration
     if (Date.now() / 1000 > payload.exp) return null;
@@ -230,6 +254,7 @@ async function signHMAC(data: string): Promise<string> {
   );
   
   const signature = await crypto.subtle.sign('HMAC', key, encoder.encode(data));
+  // Convert to base64 string
   return btoa(String.fromCharCode(...new Uint8Array(signature)));
 }
 

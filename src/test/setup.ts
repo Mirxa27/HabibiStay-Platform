@@ -90,9 +90,32 @@ Object.defineProperty(global, 'crypto', {
   value: {
     randomUUID: vi.fn(() => 'test-uuid-' + Math.random().toString(36).substr(2, 9)),
     subtle: {
-      digest: vi.fn(),
-      importKey: vi.fn(),
-      sign: vi.fn(),
+      digest: vi.fn(async (algorithm, data) => {
+        // More realistic mock implementation that varies based on input
+        const dataArray = new Uint8Array(data);
+        const mockHash = new Uint8Array(32);
+        // Create a hash that varies based on input
+        let sum = 0;
+        for (let i = 0; i < dataArray.length; i++) {
+          sum += dataArray[i];
+        }
+        // Fill with values based on input sum
+        for (let i = 0; i < 32; i++) {
+          mockHash[i] = (sum + i) % 256;
+        }
+        return mockHash.buffer;
+      }),
+      importKey: vi.fn(async () => {
+        return {};
+      }),
+      sign: vi.fn(async () => {
+        // Return a mock signature
+        const signature = new Uint8Array(32);
+        for (let i = 0; i < 32; i++) {
+          signature[i] = 255 - i;
+        }
+        return signature.buffer;
+      }),
     },
   },
 });

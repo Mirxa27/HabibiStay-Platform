@@ -124,10 +124,13 @@ export default function Navbar() {
             <button
               onClick={() => setIsOpen(!isOpen)}
               className={cn(
-                utils.touchTarget,
+                utils.touchButton,
+                utils.focusVisible,
                 'inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 transition-colors'
               )}
               aria-label="Toggle navigation menu"
+              aria-expanded={isOpen}
+              aria-controls="mobile-menu"
             >
               {isOpen ? (
                 <X className="block h-5 w-5" />
@@ -143,11 +146,22 @@ export default function Navbar() {
       {isOpen && (
         <>
           <div 
-            className={responsiveClasses.nav.overlay}
+            className={cn(
+              responsiveClasses.nav.overlay,
+              utils.overscrollBehavior
+            )}
             onClick={() => setIsOpen(false)}
             aria-hidden="true"
           />
-          <div className={responsiveClasses.nav.panel}>
+          <div 
+            id="mobile-menu"
+            className={cn(
+              responsiveClasses.nav.panel,
+              utils.overscrollBehavior,
+              utils.safeTop,
+              utils.safeBottom
+            )}
+          >
             <div className="flex flex-col h-full">
               {/* Mobile menu header */}
               <div className="flex items-center justify-between p-4 border-b border-gray-100">
@@ -166,7 +180,8 @@ export default function Navbar() {
                 <button
                   onClick={() => setIsOpen(false)}
                   className={cn(
-                    utils.touchTarget,
+                    utils.touchButton,
+                    utils.focusVisible,
                     'inline-flex items-center justify-center p-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100'
                   )}
                   aria-label="Close navigation menu"
@@ -184,8 +199,9 @@ export default function Navbar() {
                       to={item.href}
                       onClick={() => setIsOpen(false)}
                       className={cn(
-                        utils.touchTarget,
-                        'flex items-center px-3 py-3 rounded-md text-base font-medium transition-colors',
+                        utils.touchButton,
+                        utils.focusVisible,
+                        'flex items-center px-3 py-3 rounded-md text-base font-medium transition-colors w-full justify-start',
                         isActive(item.href)
                           ? 'text-[#2957c3] bg-blue-50'
                           : 'text-gray-700 hover:text-[#2957c3] hover:bg-gray-50'
@@ -227,7 +243,8 @@ export default function Navbar() {
                           to="/dashboard"
                           onClick={() => setIsOpen(false)}
                           className={cn(
-                            utils.touchTarget,
+                            utils.touchButton,
+                            utils.focusVisible,
                             'flex items-center w-full px-3 py-3 text-left text-sm text-gray-700 hover:text-[#2957c3] hover:bg-gray-50 rounded-md transition-colors'
                           )}
                         >
@@ -237,7 +254,8 @@ export default function Navbar() {
                           to="/wishlist"
                           onClick={() => setIsOpen(false)}
                           className={cn(
-                            utils.touchTarget,
+                            utils.touchButton,
+                            utils.focusVisible,
                             'flex items-center w-full px-3 py-3 text-left text-sm text-gray-700 hover:text-[#2957c3] hover:bg-gray-50 rounded-md transition-colors'
                           )}
                         >
@@ -247,7 +265,8 @@ export default function Navbar() {
                           to="/profile"
                           onClick={() => setIsOpen(false)}
                           className={cn(
-                            utils.touchTarget,
+                            utils.touchButton,
+                            utils.focusVisible,
                             'flex items-center w-full px-3 py-3 text-left text-sm text-gray-700 hover:text-[#2957c3] hover:bg-gray-50 rounded-md transition-colors'
                           )}
                         >
@@ -259,7 +278,8 @@ export default function Navbar() {
                             setIsOpen(false);
                           }}
                           className={cn(
-                            utils.touchTarget,
+                            utils.touchButton,
+                            utils.focusVisible,
                             'flex items-center w-full px-3 py-3 text-left text-sm text-gray-700 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors'
                           )}
                         >
@@ -274,7 +294,8 @@ export default function Navbar() {
                         setIsOpen(false);
                       }}
                       className={cn(
-                        utils.touchTarget,
+                        utils.touchButton,
+                        utils.focusVisible,
                         'w-full bg-[#2957c3] text-white px-4 py-3 rounded-md text-sm font-medium hover:bg-blue-700 transition-colors'
                       )}
                     >

@@ -16,7 +16,8 @@ import {
   ArrowLeft,
   X
 } from 'lucide-react';
-import type { Property, CreateBookingData } from '@/shared/types';
+import type { Property, CreateBooking } from '@/shared/types';
+import { responsiveClasses, containers, utils, cn } from '../utils/responsive';
 import { clsx } from 'clsx';
 
 interface BookingStep {
@@ -28,12 +29,12 @@ interface BookingStep {
 
 interface BookingFlowProps {
   property: Property;
-  onComplete: (bookingData: CreateBookingData) => void;
+  onComplete: (bookingData: CreateBooking) => void;
   onCancel: () => void;
   className?: string;
 }
 
-interface BookingFormData extends CreateBookingData {
+interface BookingFormData extends CreateBooking {
   nights?: number;
   totalAmount?: number;
   serviceFee?: number;
@@ -52,7 +53,7 @@ const BookingFlow: React.FC<BookingFlowProps> = ({
     guest_name: '',
     guest_email: '',
     guest_phone: '',
-    guest_count: 1,
+    total_guests: 1,
     check_in_date: '',
     check_out_date: '',
     special_requests: '',
@@ -98,9 +99,9 @@ const BookingFlow: React.FC<BookingFlowProps> = ({
       case 'dates':
         if (!formData.check_in_date) newErrors.check_in_date = 'Check-in date is required';
         if (!formData.check_out_date) newErrors.check_out_date = 'Check-out date is required';
-        if (formData.guest_count < 1) newErrors.guest_count = 'At least 1 guest is required';
-        if (formData.guest_count > property.max_guests) {
-          newErrors.guest_count = `Maximum ${property.max_guests} guests allowed`;
+        if (formData.total_guests < 1) newErrors.total_guests = 'At least 1 guest is required';
+        if (formData.total_guests > property.max_guests) {
+          newErrors.total_guests = `Maximum ${property.max_guests} guests allowed`;
         }
         if (formData.check_in_date && formData.check_out_date) {
           const checkIn = new Date(formData.check_in_date);
@@ -167,28 +168,33 @@ const BookingFlow: React.FC<BookingFlowProps> = ({
   };
 
   const renderStepIndicator = () => (
-    <div className="flex items-center justify-between mb-6">
+    <div className={cn(
+      "flex items-center justify-between mb-4 sm:mb-6",
+      "overflow-x-auto scrollbar-hide"
+    )}>
       {steps.map((step, index) => (
         <React.Fragment key={step.id}>
-          <div className="flex items-center">
-            <div className={clsx(
-              'w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium',
+          <div className="flex items-center flex-shrink-0">
+            <div className={cn(
+              "w-6 h-6 sm:w-8 sm:h-8 rounded-full flex items-center justify-center font-medium",
+              responsiveClasses.text.small,
               step.current ? 'bg-[#2957c3] text-white' :
               step.completed ? 'bg-green-500 text-white' :
               'bg-gray-200 text-gray-600'
             )}>
-              {step.completed ? <CheckCircle className="h-5 w-5" /> : index + 1}
+              {step.completed ? <CheckCircle className="h-3 w-3 sm:h-5 sm:w-5" /> : index + 1}
             </div>
-            <span className={clsx(
-              'ml-2 text-sm font-medium',
+            <span className={cn(
+              "ml-1 sm:ml-2 font-medium whitespace-nowrap",
+              responsiveClasses.text.small,
               step.current ? 'text-[#2957c3]' : step.completed ? 'text-green-600' : 'text-gray-500'
             )}>
               {step.title}
             </span>
           </div>
           {index < steps.length - 1 && (
-            <div className={clsx(
-              'flex-1 h-0.5 mx-4',
+            <div className={cn(
+              "flex-1 h-0.5 mx-2 sm:mx-4",
               step.completed ? 'bg-green-500' : 'bg-gray-200'
             )} />
           )}
@@ -246,15 +252,15 @@ const BookingFlow: React.FC<BookingFlowProps> = ({
         <div className="flex items-center space-x-2">
           <button
             type="button"
-            onClick={() => updateFormData({ guest_count: Math.max(1, formData.guest_count - 1) })}
+            onClick={() => updateFormData({ total_guests: Math.max(1, formData.total_guests - 1) })}
             className="p-2 border border-gray-300 rounded-md hover:bg-gray-50"
           >
             -
           </button>
           <input
             type="number"
-            value={formData.guest_count}
-            onChange={(e) => updateFormData({ guest_count: parseInt(e.target.value) || 1 })}
+            value={formData.total_guests}
+            onChange={(e) => updateFormData({ total_guests: parseInt(e.target.value) || 1 })}
             min="1"
             max={property.max_guests}
             className={clsx(
@@ -264,7 +270,7 @@ const BookingFlow: React.FC<BookingFlowProps> = ({
           />
           <button
             type="button"
-            onClick={() => updateFormData({ guest_count: Math.min(property.max_guests, formData.guest_count + 1) })}
+            onClick={() => updateFormData({ total_guests: Math.min(property.max_guests, formData.total_guests + 1) })}
             className="p-2 border border-gray-300 rounded-md hover:bg-gray-50"
           >
             +
@@ -398,7 +404,7 @@ const BookingFlow: React.FC<BookingFlowProps> = ({
         </div>
         <div className="flex items-center justify-between text-sm">
           <span className="text-gray-600">Guests:</span>
-          <span className="font-medium">{formData.guest_count}</span>
+          <span className="font-medium">{formData.total_guests}</span>
         </div>
         <div className="flex items-center justify-between text-sm">
           <span className="text-gray-600">Guest:</span>

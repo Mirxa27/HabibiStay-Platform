@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { X, User, Mail, Phone, MessageCircle, Calendar, Users } from 'lucide-react';
-import { useChat } from '@/react-app/contexts/ChatContext';
+import { useChat } from '../contexts/ChatContext';
 import PaymentModal from './PaymentModal';
-import type { Property, Booking } from '@/shared/types';
+import type { Property, Booking } from '../../shared/types';
 import { responsiveClasses, utils, cn } from '../utils/responsive';
 
 interface BookingModalProps {

@@ -1,0 +1,22 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "0198e085-9738-7b3f-a205-ec01ec5b130b",
+  "main": "./src/worker/index.full.ts",
+  "compatibility_date": "2025-06-17",
+  "compatibility_flags": ["nodejs_compat"],
+  "observability": {
+    "enabled": true,
+  },
+  "upload_source_maps": true,
+  "assets": {
+    "directory": "./public",
+    "not_found_handling": "single-page-application"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "habibistay",
+      "database_id": "51730f7d-5c64-44e6-8ffa-c67557de8762",
+    },
+  ],
+}

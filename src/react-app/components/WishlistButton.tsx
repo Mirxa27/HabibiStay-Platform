@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Heart } from 'lucide-react';
-import { useWishlist } from '@/hooks/useWishlist';
+import { useWishlist } from '../hooks/useWishlist';
 import { useAuth } from '@getmocha/users-service/react';
 
 interface WishlistButtonProps {

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { X, CreditCard, Lock } from 'lucide-react';
-import type { Booking } from '@/shared/types';
+import type { Booking } from '../../shared/types';
 
 interface PaymentModalProps {
   isOpen: boolean;

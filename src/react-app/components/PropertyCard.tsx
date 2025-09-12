@@ -20,7 +20,7 @@ import {
   ChevronLeft,
   ChevronRight
 } from 'lucide-react';
-import type { Property } from '@/shared/types';
+import type { Property } from '../../shared/types';
 import { responsiveClasses, imageSizes, utils, cn } from '../utils/responsive';
 import { clsx } from 'clsx';
 
@@ -291,7 +291,10 @@ export default function PropertyCard({
           {/* Rating */}
           {(property as any).average_rating && (property as any).average_rating > 0 && (
             <div className="flex items-center">
-              <Star className="h-3 w-3 text-yellow-400 fill-current mr-1" />
+              <Star 
+                className="h-3 w-3 text-yellow-400 fill-current mr-1" 
+                data-testid="star-icon"
+              />
               <span className="text-xs text-gray-600">
                 {(property as any).average_rating.toFixed(1)}
                 {(property as any).review_count && (property as any).review_count > 0 && (

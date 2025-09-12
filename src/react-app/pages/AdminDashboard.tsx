@@ -16,8 +16,8 @@ import {
   Bot
 } from 'lucide-react';
 import { Link } from 'react-router';
-import AIConfigPanel from '@/react-app/components/admin/AIConfigPanel';
-import type { Property, Booking } from '@/shared/types';
+import AIConfigPanel from '../components/admin/AIConfigPanel';
+import type { Property, Booking } from '../../shared/types';
 
 interface AdminStats {
   total_users: number;

@@ -1,17 +1,24 @@
 // Security Middleware for HabibiStay Backend - Production Ready
 
 import { MiddlewareHandler } from 'hono';
-import { 
-  rateLimiter, 
-  csrfProtection, 
-  ipSecurity, 
-  auditLogger, 
+import {
+  rateLimiter,
+  csrfProtection,
+  ipSecurity,
+  auditLogger,
   securityHeaders,
   verifyJWT,
   sanitizeString,
   SessionManager,
   UserPermissions
 } from './security-utils';
+import {
+  authMiddleware as mochaAuthMiddleware,
+  getOAuthRedirectUrl,
+  exchangeCodeForSessionToken,
+  deleteSession,
+  MOCHA_SESSION_TOKEN_COOKIE_NAME,
+} from "@getmocha/users-service/backend";
 import { z } from 'zod';
 
 // Enhanced rate limiting with user-specific limits
@@ -111,8 +118,8 @@ export const authMiddleware: MiddlewareHandler = async (c, next) => {
     
     // Verify JWT with comprehensive validation
     const payload = await verifyJWT(token, {
-      issuer: c.env.JWT_ISSUER,
-      audience: c.env.JWT_AUDIENCE,
+      issuer: c.env.JWT_ISSUER || 'habibistay',
+      audience: c.env.JWT_AUDIENCE || 'habibistay-api',
       algorithms: ['HS256', 'RS256']
     });
     
@@ -184,17 +191,19 @@ export const authMiddleware: MiddlewareHandler = async (c, next) => {
     c.set('permissions', userProfile.permissions || []);
     
     // Update session last activity
-    await sessionManager.updateLastActivity(session.id);
-    
+    if (session.session?.id) {
+      await sessionManager.updateLastActivity(session.session.id);
+    }
+
     await auditLogger.log({
       userId: payload.sub,
       ip,
       action: 'AUTHENTICATED_ACCESS',
       resource: c.req.url,
-      details: { 
-        email: userProfile.email, 
+      details: {
+        email: userProfile.email,
         role: userProfile.role,
-        sessionId: session.id
+        sessionId: session.session?.id || payload.sessionId
       },
       success: true
     });
@@ -576,6 +585,11 @@ function containsSQLInjection(input: string): boolean {
 // Helper function to get user profile with permissions
 async function getUserProfile(userId: string, db: any): Promise<any> {
   try {
+    if (!userId) {
+      console.error('getUserProfile: userId is required');
+      return null;
+    }
+
     const user = await db.prepare(`
       SELECT u.*, GROUP_CONCAT(p.permission_name) as permissions
       FROM users u

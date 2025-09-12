@@ -1,19 +1,14 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Search, Filter, MapPin, Calendar, Users, Star, Home, Bath, Bed, X } from 'lucide-react';
-import type { Property, AdvancedPropertySearch } from '@/shared/types';
-import PropertyCard from '@/react-app/components/PropertyCard';
+import type { Property, AdvancedPropertySearch } from '../../shared/types';
+import PropertyCard from '../components/PropertyCard';
+import { LoadingState, PropertyCardSkeleton, EmptyState, NetworkError } from '../components/LoadingStates';
+import { useAsync, usePagination } from '../hooks/useAsync';
+import { apiRequest } from '../utils/errorHandling';
+import { responsiveClasses, containers, utils, cn } from '../utils/responsive';
 
 export default function StaysPage() {
-  const [properties, setProperties] = useState<Property[]>([]);
-  const [loading, setLoading] = useState(true);
   const [showFilters, setShowFilters] = useState(false);
-  const [pagination, setPagination] = useState({
-    page: 1,
-    limit: 20,
-    total: 0,
-    totalPages: 0,
-  });
-  
   const [searchFilters, setSearchFilters] = useState<AdvancedPropertySearch>({
     location: '',
     check_in: '',
@@ -30,23 +25,21 @@ export default function StaysPage() {
     limit: 20,
   });
 
-  const availableAmenities = [
-    'WiFi', 'Air Conditioning', 'Kitchen', 'Parking', 'TV', 'Balcony',
-    'Pool', 'Gym', 'Elevator', 'Security', 'Laundry', 'Garden',
-    'BBQ Area', 'Terrace', 'Fireplace', 'Hot Tub'
-  ];
-
-  useEffect(() => {
-    fetchProperties();
-  }, []);
-
-  const fetchProperties = async (filters?: AdvancedPropertySearch) => {
-    setLoading(true);
-    try {
+  // Use the pagination hook for loading properties
+  const {
+    data: properties,
+    loading,
+    error,
+    hasMore,
+    loadMore,
+    refresh,
+    refreshing
+  } = usePagination<Property>(
+    async (page: number, limit: number) => {
       const params = new URLSearchParams();
-      const filtersToUse = filters || searchFilters;
+      const filters = { ...searchFilters, page, limit };
       
-      Object.entries(filtersToUse).forEach(([key, value]) => {
+      Object.entries(filters).forEach(([key, value]) => {
         if (value !== undefined && value !== null && value !== '') {
           if (Array.isArray(value)) {
             value.forEach(v => params.append(key, v.toString()));
@@ -56,31 +49,43 @@ export default function StaysPage() {
         }
       });
 
-      const response = await fetch(`/api/properties?${params.toString()}`);
-      const data = await response.json();
-      if (data.success) {
-        setProperties(data.data);
-        if (data.pagination) {
-          setPagination(data.pagination);
-        }
+      const response = await apiRequest<{
+        success: boolean;
+        data: Property[];
+        pagination: { total: number; hasMore: boolean };
+      }>(`/api/properties?${params.toString()}`);
+      
+      if (response.success) {
+        return {
+          data: response.data,
+          total: response.pagination.total,
+          hasMore: response.pagination.hasMore
+        };
       }
-    } catch (error) {
-      console.error('Error fetching properties:', error);
-    } finally {
-      setLoading(false);
+      
+      throw new Error('Failed to fetch properties');
+    },
+    {
+      pageSize: 20,
+      onDataLoad: (data, page) => {
+        console.log(`Loaded ${data.length} properties for page ${page}`);
+      }
     }
-  };
+  );
+
+  const availableAmenities = [
+    'WiFi', 'Air Conditioning', 'Kitchen', 'Parking', 'TV', 'Balcony',
+    'Pool', 'Gym', 'Elevator', 'Security', 'Laundry', 'Garden',
+    'BBQ Area', 'Terrace', 'Fireplace', 'Hot Tub'
+  ];
 
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault();
-    const updatedFilters = { ...searchFilters, page: 1 };
-    setSearchFilters(updatedFilters);
-    fetchProperties(updatedFilters);
+    refresh(); // Refresh with current filters
   };
 
   const handleFilterChange = (key: keyof AdvancedPropertySearch, value: any) => {
-    const updatedFilters = { ...searchFilters, [key]: value, page: 1 };
-    setSearchFilters(updatedFilters);
+    setSearchFilters(prev => ({ ...prev, [key]: value }));
   };
 
   const toggleAmenity = (amenity: string) => {
@@ -93,7 +98,7 @@ export default function StaysPage() {
   };
 
   const clearFilters = () => {
-    const clearedFilters: AdvancedPropertySearch = {
+    setSearchFilters({
       location: '',
       check_in: '',
       check_out: '',
@@ -107,15 +112,8 @@ export default function StaysPage() {
       sort_by: 'featured',
       page: 1,
       limit: 20,
-    };
-    setSearchFilters(clearedFilters);
-    fetchProperties(clearedFilters);
-  };
-
-  const handlePageChange = (newPage: number) => {
-    const updatedFilters = { ...searchFilters, page: newPage };
-    setSearchFilters(updatedFilters);
-    fetchProperties(updatedFilters);
+    });
+    refresh();
   };
 
   const comfort = [
@@ -139,38 +137,66 @@ export default function StaysPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Hero Section */}
-      <section className="bg-[#2957c3] text-white py-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-12">
-            <h1 className="text-4xl md:text-5xl font-bold mb-4">
+      <section className={cn(
+        "bg-[#2957c3] text-white",
+        "py-12 sm:py-16 md:py-20"
+      )}>
+        <div className={containers.page}>
+          <div className={cn(
+            "text-center mb-8 sm:mb-12",
+            responsiveClasses.padding.page
+          )}>
+            <h1 className={cn(
+              responsiveClasses.text.h1,
+              "mb-3 sm:mb-4"
+            )}>
               Your Perfect Riyadh Stay
             </h1>
-            <p className="text-xl text-blue-100 max-w-3xl mx-auto">
+            <p className={cn(
+              "text-lg sm:text-xl text-blue-100 max-w-3xl mx-auto",
+              responsiveClasses.text.body
+            )}>
               Discover exceptional accommodations that combine luxury, comfort, and authentic Saudi hospitality
             </p>
           </div>
 
           {/* Search Form */}
-          <form onSubmit={handleSearch} className="bg-white rounded-xl p-6 shadow-lg">
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <form onSubmit={handleSearch} className={cn(
+            responsiveClasses.card.base,
+            "bg-white rounded-xl shadow-lg",
+            responsiveClasses.card.padding
+          )}>
+            <div className={cn(
+              "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4",
+              "gap-3 sm:gap-4"
+            )}>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className={cn(
+                  "block font-medium text-gray-700 mb-1 sm:mb-2",
+                  responsiveClasses.text.small
+                )}>
                   Location
                 </label>
                 <div className="relative">
-                  <MapPin className="absolute left-3 top-3 h-5 w-5 text-gray-400" />
+                  <MapPin className="absolute left-2 sm:left-3 top-2.5 sm:top-3 h-4 w-4 sm:h-5 sm:w-5 text-gray-400" />
                   <input
                     type="text"
                     value={searchFilters.location}
                     onChange={(e) => handleFilterChange('location', e.target.value)}
                     placeholder="Enter location..."
-                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2957c3] focus:border-transparent"
+                    className={cn(
+                      "w-full pl-8 sm:pl-10 pr-3 sm:pr-4 py-2 sm:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2957c3] focus:border-transparent",
+                      responsiveClasses.text.small
+                    )}
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className={cn(
+                  "block font-medium text-gray-700 mb-1 sm:mb-2",
+                  responsiveClasses.text.small
+                )}>
                   Check-in
                 </label>
                 <input
@@ -178,12 +204,18 @@ export default function StaysPage() {
                   value={searchFilters.check_in}
                   onChange={(e) => handleFilterChange('check_in', e.target.value)}
                   min={new Date().toISOString().split('T')[0]}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2957c3] focus:border-transparent"
+                  className={cn(
+                    "w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2957c3] focus:border-transparent",
+                    responsiveClasses.text.small
+                  )}
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className={cn(
+                  "block font-medium text-gray-700 mb-1 sm:mb-2",
+                  responsiveClasses.text.small
+                )}>
                   Check-out
                 </label>
                 <input
@@ -191,18 +223,27 @@ export default function StaysPage() {
                   value={searchFilters.check_out}
                   onChange={(e) => handleFilterChange('check_out', e.target.value)}
                   min={searchFilters.check_in || new Date().toISOString().split('T')[0]}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2957c3] focus:border-transparent"
+                  className={cn(
+                    "w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2957c3] focus:border-transparent",
+                    responsiveClasses.text.small
+                  )}
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className={cn(
+                  "block font-medium text-gray-700 mb-1 sm:mb-2",
+                  responsiveClasses.text.small
+                )}>
                   Guests
                 </label>
                 <select
                   value={searchFilters.guests}
                   onChange={(e) => handleFilterChange('guests', parseInt(e.target.value))}
-                  className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2957c3] focus:border-transparent"
+                  className={cn(
+                    "w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2957c3] focus:border-transparent",
+                    responsiveClasses.text.small
+                  )}
                 >
                   {[1, 2, 3, 4, 5, 6, 7, 8].map(num => (
                     <option key={num} value={num}>{num} guest{num > 1 ? 's' : ''}</option>
@@ -211,20 +252,31 @@ export default function StaysPage() {
               </div>
             </div>
 
-            <div className="mt-6 flex justify-center space-x-4">
+            <div className={cn(
+              "mt-4 sm:mt-6 flex flex-col sm:flex-row justify-center items-center",
+              "space-y-2 sm:space-y-0 sm:space-x-4"
+            )}>
               <button
                 type="submit"
-                className="bg-[#2957c3] text-white px-8 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors inline-flex items-center"
+                className={cn(
+                  "bg-[#2957c3] text-white rounded-lg font-semibold hover:bg-blue-700 transition-colors inline-flex items-center",
+                  responsiveClasses.button.primary,
+                  utils.touchTarget
+                )}
               >
-                <Search className="h-5 w-5 mr-2" />
+                <Search className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
                 Search Properties
               </button>
               <button
                 type="button"
                 onClick={() => setShowFilters(!showFilters)}
-                className="bg-gray-100 text-gray-700 px-6 py-3 rounded-lg font-semibold hover:bg-gray-200 transition-colors inline-flex items-center"
+                className={cn(
+                  "bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200 transition-colors inline-flex items-center",
+                  responsiveClasses.button.primary,
+                  utils.touchTarget
+                )}
               >
-                <Filter className="h-5 w-5 mr-2" />
+                <Filter className="h-4 w-4 sm:h-5 sm:w-5 mr-2" />
                 More Filters
               </button>
             </div>
@@ -405,9 +457,9 @@ export default function StaysPage() {
               <h2 className="text-2xl font-bold text-gray-900">
                 Available Properties
               </h2>
-              {pagination.total > 0 && (
+              {properties.length > 0 && (
                 <p className="text-gray-600 mt-1">
-                  Showing {((pagination.page - 1) * pagination.limit) + 1} - {Math.min(pagination.page * pagination.limit, pagination.total)} of {pagination.total} properties
+                  {refreshing ? 'Refreshing...' : `Showing ${properties.length} properties`}
                 </p>
               )}
             </div>
@@ -415,11 +467,11 @@ export default function StaysPage() {
               <select
                 value={searchFilters.sort_by}
                 onChange={(e) => {
-                  const updatedFilters = { ...searchFilters, sort_by: e.target.value as any };
-                  setSearchFilters(updatedFilters);
-                  fetchProperties(updatedFilters);
+                  handleFilterChange('sort_by', e.target.value);
+                  refresh();
                 }}
-                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2957c3] focus:border-transparent"
+                disabled={loading}
+                className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-[#2957c3] focus:border-transparent disabled:opacity-50"
               >
                 <option value="featured">Featured First</option>
                 <option value="price_asc">Price: Low to High</option>
@@ -430,83 +482,70 @@ export default function StaysPage() {
             </div>
           </div>
 
-          {loading ? (
+          {/* Error State */}
+          {error && (
+            <NetworkError 
+              onRetry={refresh}
+              className="mb-8"
+            />
+          )}
+
+          {/* Loading State */}
+          {loading && properties.length === 0 && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {[1, 2, 3, 4, 5, 6].map((i) => (
-                <div key={i} className="animate-pulse">
-                  <div className="bg-gray-300 h-64 rounded-lg mb-4"></div>
-                  <div className="h-4 bg-gray-300 rounded mb-2"></div>
-                  <div className="h-4 bg-gray-300 rounded w-2/3"></div>
-                </div>
+              {Array.from({ length: 6 }).map((_, i) => (
+                <PropertyCardSkeleton key={i} />
               ))}
-            </div>
-          ) : properties.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-              {properties.map((property) => (
-                <PropertyCard key={property.id} property={property} />
-              ))}
-            </div>
-          ) : (
-            <div className="text-center py-12">
-              <Home className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <p className="text-gray-500 text-lg">No properties found matching your criteria.</p>
-              <p className="text-gray-400 mt-2">Try adjusting your search filters or browse all available properties.</p>
-              <button
-                onClick={clearFilters}
-                className="mt-4 bg-[#2957c3] text-white px-6 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors"
-              >
-                Clear Filters
-              </button>
             </div>
           )}
 
-          {/* Pagination */}
-          {pagination.totalPages > 1 && (
-            <div className="mt-12 flex justify-center">
-              <nav className="flex items-center space-x-2">
-                {/* Previous Button */}
-                <button
-                  onClick={() => handlePageChange(pagination.page - 1)}
-                  disabled={pagination.page <= 1}
-                  className="px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-md hover:text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Previous
-                </button>
+          {/* Properties Grid */}
+          {!loading && !error && properties.length > 0 && (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
+                {properties.map((property) => (
+                  <PropertyCard key={property.id} property={property} />
+                ))}
+              </div>
+              
+              {/* Load More Button */}
+              {hasMore && (
+                <div className="text-center mt-12">
+                  <button
+                    onClick={loadMore}
+                    disabled={loading}
+                    className={cn(
+                      utils.touchButton,
+                      utils.focusVisible,
+                      'bg-[#2957c3] text-white px-8 py-3 rounded-lg font-semibold hover:bg-blue-700 transition-colors inline-flex items-center',
+                      loading && 'opacity-50 cursor-not-allowed'
+                    )}
+                  >
+                    {loading ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                        Loading...
+                      </>
+                    ) : (
+                      'Load More Properties'
+                    )}
+                  </button>
+                </div>
+              )}
+            </>
+          )}
 
-                {/* Page Numbers */}
-                {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
-                  const pageNumber = Math.max(1, Math.min(
-                    pagination.totalPages - 4,
-                    pagination.page - 2
-                  )) + i;
-                  
-                  if (pageNumber > pagination.totalPages) return null;
-                  
-                  return (
-                    <button
-                      key={pageNumber}
-                      onClick={() => handlePageChange(pageNumber)}
-                      className={`px-3 py-2 text-sm font-medium rounded-md ${
-                        pageNumber === pagination.page
-                          ? 'text-white bg-[#2957c3] border border-[#2957c3]'
-                          : 'text-gray-700 bg-white border border-gray-300 hover:text-gray-900 hover:bg-gray-50'
-                      }`}
-                    >
-                      {pageNumber}
-                    </button>
-                  );
-                })}
-
-                {/* Next Button */}
-                <button
-                  onClick={() => handlePageChange(pagination.page + 1)}
-                  disabled={pagination.page >= pagination.totalPages}
-                  className="px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-md hover:text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Next
-                </button>
-              </nav>
-            </div>
+          {/* Empty State */}
+          {!loading && !error && properties.length === 0 && (
+            <EmptyState
+              icon={<Home className="w-16 h-16 text-gray-400" />}
+              title="No properties found"
+              description="No properties match your current search criteria. Try adjusting your filters or browse all available properties."
+              action={{
+                label: 'Clear Filters',
+                onClick: clearFilters
+              }}
+            />
           )}
         </div>
       </section>

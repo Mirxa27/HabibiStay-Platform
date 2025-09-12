@@ -15,7 +15,7 @@ import {
   Users,
   Volume2
 } from 'lucide-react';
-import type { AIConfig } from '@/shared/types';
+import type { AIConfig } from '../../../shared/types';
 
 interface AIConfigData {
   model_provider: 'openai' | 'anthropic' | 'gemini';

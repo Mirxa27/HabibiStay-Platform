@@ -1,5 +1,7 @@
+import React from 'react';
 import { Link } from 'react-router';
 import { Heart, Award, Users } from 'lucide-react';
+import { responsiveClasses, containers, utils, cn } from '../utils/responsive';
 
 export default function AboutPage() {
   const founders = [
@@ -52,19 +54,35 @@ export default function AboutPage() {
   return (
     <div className="min-h-screen">
       {/* Hero Section */}
-      <section className="bg-gradient-to-br from-[#2957c3] to-blue-800 text-white py-20">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center">
-            <h1 className="text-4xl md:text-5xl font-bold mb-6">
+      <section className={cn(
+        "bg-gradient-to-br from-[#2957c3] to-blue-800 text-white",
+        "py-12 sm:py-16 md:py-20"
+      )}>
+        <div className={containers.page}>
+          <div className={cn(
+            "text-center",
+            responsiveClasses.padding.page
+          )}>
+            <h1 className={cn(
+              responsiveClasses.text.h1,
+              "mb-4 sm:mb-6"
+            )}>
               Building the Future of
               <span className="block text-yellow-300">Saudi Hospitality</span>
             </h1>
-            <p className="text-xl text-blue-100 max-w-3xl mx-auto mb-8">
+            <p className={cn(
+              "text-lg sm:text-xl text-blue-100 max-w-3xl mx-auto mb-6 sm:mb-8",
+              responsiveClasses.text.body
+            )}>
               We're more than a platform—we're partners in Saudi Arabia's transformation, creating exceptional experiences while building sustainable wealth for our community.
             </p>
             <Link
               to="/contact"
-              className="bg-white text-[#2957c3] px-8 py-4 rounded-lg font-semibold hover:bg-gray-100 transition-colors inline-block"
+              className={cn(
+                "bg-white text-[#2957c3] rounded-lg font-semibold hover:bg-gray-100 transition-colors inline-block",
+                responsiveClasses.button.primary,
+                utils.touchTarget
+              )}
             >
               Join Our Journey
             </Link>
@@ -73,27 +91,55 @@ export default function AboutPage() {
       </section>
 
       {/* Mission Section */}
-      <section className="py-20 bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 items-center">
+      <section className={cn(
+        responsiveClasses.padding.section,
+        "bg-white"
+      )}>
+        <div className={containers.page}>
+          <div className={cn(
+            "grid grid-cols-1 lg:grid-cols-2",
+            "gap-8 sm:gap-12 items-center",
+            responsiveClasses.padding.page
+          )}>
             <div>
-              <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-6">
+              <h2 className={cn(
+                responsiveClasses.text.h2,
+                "text-gray-900 mb-4 sm:mb-6"
+              )}>
                 Our Mission
               </h2>
-              <p className="text-lg text-gray-600 mb-6">
+              <p className={cn(
+                responsiveClasses.text.body,
+                "text-gray-600 mb-4 sm:mb-6"
+              )}>
                 To democratize real estate investment while delivering world-class hospitality experiences that showcase the best of Saudi Arabia's culture and innovation.
               </p>
-              <p className="text-lg text-gray-600 mb-6">
+              <p className={cn(
+                responsiveClasses.text.body,
+                "text-gray-600 mb-4 sm:mb-6"
+              )}>
                 We believe that exceptional stays and exceptional returns aren't mutually exclusive. By combining cutting-edge technology with deep local expertise, we're creating a platform that benefits everyone in our ecosystem.
               </p>
-              <div className="grid grid-cols-2 gap-6">
+              <div className={cn(
+                "grid grid-cols-2 gap-4 sm:gap-6"
+              )}>
                 <div>
-                  <div className="text-2xl font-bold text-[#2957c3] mb-2">500+</div>
-                  <div className="text-gray-600">Properties Managed</div>
+                  <div className={cn(
+                    "text-xl sm:text-2xl font-bold text-[#2957c3] mb-1 sm:mb-2"
+                  )}>500+</div>
+                  <div className={cn(
+                    responsiveClasses.text.small,
+                    "text-gray-600"
+                  )}>Properties Managed</div>
                 </div>
                 <div>
-                  <div className="text-2xl font-bold text-[#2957c3] mb-2">15,000+</div>
-                  <div className="text-gray-600">Happy Guests</div>
+                  <div className={cn(
+                    "text-xl sm:text-2xl font-bold text-[#2957c3] mb-1 sm:mb-2"
+                  )}>15,000+</div>
+                  <div className={cn(
+                    responsiveClasses.text.small,
+                    "text-gray-600"
+                  )}>Happy Guests</div>
                 </div>
               </div>
             </div>
@@ -101,7 +147,7 @@ export default function AboutPage() {
               <img
                 src="https://images.unsplash.com/photo-1600880292203-757bb62b4baf?auto=format&fit=crop&w=800&h=600"
                 alt="Modern Saudi Architecture"
-                className="rounded-xl shadow-lg"
+                className="w-full h-64 sm:h-80 md:h-96 object-cover rounded-xl shadow-lg"
               />
             </div>
           </div>
@@ -109,28 +155,56 @@ export default function AboutPage() {
       </section>
 
       {/* Values Section */}
-      <section className="py-20 bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">
+      <section className={cn(
+        responsiveClasses.padding.section,
+        "bg-gray-50"
+      )}>
+        <div className={containers.page}>
+          <div className={cn(
+            "text-center mb-12 sm:mb-16",
+            responsiveClasses.padding.page
+          )}>
+            <h2 className={cn(
+              responsiveClasses.text.h2,
+              "text-gray-900 mb-3 sm:mb-4"
+            )}>
               Our Values
             </h2>
-            <p className="text-xl text-gray-600">
+            <p className={cn(
+              responsiveClasses.text.body,
+              "text-gray-600"
+            )}>
               The principles that guide everything we do
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className={cn(
+            responsiveClasses.grid.triple,
+            "gap-6 sm:gap-8",
+            responsiveClasses.padding.page
+          )}>
             {values.map((value, index) => (
               <div
                 key={index}
-                className="bg-white p-8 rounded-xl shadow-sm hover:shadow-md transition-shadow text-center"
+                className={cn(
+                  responsiveClasses.card.base,
+                  "hover:shadow-md transition-shadow text-center",
+                  responsiveClasses.card.padding
+                )}
               >
-                <div className="w-16 h-16 bg-[#2957c3] bg-opacity-10 rounded-full flex items-center justify-center mx-auto mb-6">
-                  <value.icon className="h-8 w-8 text-[#2957c3]" />
+                <div className={cn(
+                  "w-12 h-12 sm:w-16 sm:h-16 bg-[#2957c3] bg-opacity-10 rounded-full flex items-center justify-center mx-auto mb-4 sm:mb-6"
+                )}>
+                  <value.icon className="h-6 w-6 sm:h-8 sm:w-8 text-[#2957c3]" />
                 </div>
-                <h3 className="text-xl font-bold text-gray-900 mb-4">{value.title}</h3>
-                <p className="text-gray-600">{value.description}</p>
+                <h3 className={cn(
+                  responsiveClasses.text.h4,
+                  "text-gray-900 mb-3 sm:mb-4"
+                )}>{value.title}</h3>
+                <p className={cn(
+                  responsiveClasses.text.small,
+                  "text-gray-600"
+                )}>{value.description}</p>
               </div>
             ))}
           </div>

@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router';
 import { ArrowRight, Star, Users, Building, TrendingUp } from 'lucide-react';
-import { useChat } from '@/react-app/contexts/ChatContext';
-import type { Property } from '@/shared/types';
-import PropertyCard from '@/react-app/components/PropertyCard';
+import { useChat } from '../contexts/ChatContext';
+import type { Property } from '../../shared/types';
+import PropertyCard from '../components/PropertyCard';
 import { responsiveClasses, containers, utils, cn } from '../utils/responsive';
 
 export default function HomePage() {
