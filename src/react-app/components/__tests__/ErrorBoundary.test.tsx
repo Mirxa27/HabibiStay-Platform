@@ -1,7 +1,7 @@
-import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { BrowserRouter } from 'react-router';
 import ErrorBoundary from '../ErrorBoundary';
+import { render, screen, fireEvent } from '../../../test/utils';
 
 // A component that throws an error
 const ProblematicComponent = () => {

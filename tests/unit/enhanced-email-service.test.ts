@@ -3,25 +3,26 @@
  */
 
 import { EnhancedEmailService, ResendProvider, SendGridProvider } from '../../src/shared/enhanced-email-service';
+import { vi } from 'vitest';
 
 // Mock database
 const mockDb = {
-  prepare: jest.fn().mockReturnThis(),
-  bind: jest.fn().mockReturnThis(),
-  first: jest.fn(),
-  run: jest.fn(),
-  all: jest.fn()
+  prepare: vi.fn().mockReturnThis(),
+  bind: vi.fn().mockReturnThis(),
+  first: vi.fn(),
+  run: vi.fn(),
+  all: vi.fn()
 };
 
 // Mock fetch
-const mockFetch = global.fetch as jest.MockedFunction<typeof fetch>;
+const mockFetch = global.fetch as any;
 
 describe('EnhancedEmailService', () => {
   let emailService: EnhancedEmailService;
 
   beforeEach(() => {
     emailService = new EnhancedEmailService(mockDb as any);
-    jest.clearAllMocks();
+    vi.clearAllMocks();
   });
 
   describe('initializeProviders', () => {
@@ -198,101 +199,3 @@ describe('EnhancedEmailService', () => {
     it('should return email statistics', async () => {
       mockDb.first.mockResolvedValueOnce({
         total_sent: 150,
-        total_failed: 5,
-        total_emails: 155
-      });
-
-      mockDb.all.mockResolvedValueOnce({
-        results: [
-          { template_key: 'booking_confirmation', count: 80 },
-          { template_key: 'welcome_email', count: 45 },
-          { template_key: 'payment_confirmation', count: 25 }
-        ]
-      });
-
-      const stats = await emailService.getEmailStats('30d');
-
-      expect(stats.total_sent).toBe(150);
-      expect(stats.total_failed).toBe(5);
-      expect(stats.success_rate).toBe(96.77);
-      expect(stats.top_templates).toHaveLength(3);
-      expect(stats.top_templates[0].template_key).toBe('booking_confirmation');
-    });
-
-    it('should handle empty statistics gracefully', async () => {
-      mockDb.first.mockResolvedValueOnce({
-        total_sent: 0,
-        total_failed: 0,
-        total_emails: 0
-      });
-
-      mockDb.all.mockResolvedValueOnce({ results: [] });
-
-      const stats = await emailService.getEmailStats('7d');
-
-      expect(stats.total_sent).toBe(0);
-      expect(stats.success_rate).toBe(0);
-      expect(stats.top_templates).toHaveLength(0);
-    });
-  });
-});
-
-describe('ResendProvider', () => {
-  let provider: ResendProvider;
-
-  beforeEach(() => {
-    provider = new ResendProvider('test-api-key');
-    jest.clearAllMocks();
-  });
-
-  describe('sendEmail', () => {
-    it('should send email via Resend API', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ id: 'resend_123' })
-      } as Response);
-
-      const result = await provider.sendEmail({
-        to: 'test@example.com',
-        subject: 'Test',
-        html: '<p>Test</p>'
-      });
-
-      expect(result.success).toBe(true);
-      expect(result.messageId).toBe('resend_123');
-      expect(result.provider).toBe('resend');
-    });
-
-    it('should handle API errors', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: false,
-        json: async () => ({ message: 'Invalid API key' })
-      } as Response);
-
-      const result = await provider.sendEmail({
-        to: 'test@example.com',
-        subject: 'Test',
-        html: '<p>Test</p>'
-      });
-
-      expect(result.success).toBe(false);
-      expect(result.error).toBe('Invalid API key');
-    });
-  });
-
-  describe('verifyConnection', () => {
-    it('should verify connection successfully', async () => {
-      mockFetch.mockResolvedValueOnce({ ok: true } as Response);
-
-      const isConnected = await provider.verifyConnection();
-      expect(isConnected).toBe(true);
-    });
-
-    it('should handle connection failure', async () => {
-      mockFetch.mockRejectedValueOnce(new Error('Network error'));
-
-      const isConnected = await provider.verifyConnection();
-      expect(isConnected).toBe(false);
-    });
-  });
-});

@@ -13,10 +13,12 @@ import {
   Activity,
   Eye,
   Plus,
-  Bot
+  Bot,
+  FileText
 } from 'lucide-react';
 import { Link } from 'react-router';
 import AIConfigPanel from '../components/admin/AIConfigPanel';
+import CMSAdminPanel from '../components/admin/CMSAdminPanel';
 import type { Property, Booking } from '../../shared/types';
 
 interface AdminStats {
@@ -33,7 +35,7 @@ interface AdminStats {
 export default function AdminDashboardPage() {
   const { user, redirectToLogin } = useAuth();
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'overview' | 'properties' | 'bookings' | 'users' | 'ai-config' | 'settings'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'properties' | 'bookings' | 'users' | 'ai-config' | 'cms' | 'settings'>('overview');
   const [stats, setStats] = useState<AdminStats>({
     total_users: 0,
     total_properties: 0,
@@ -162,6 +164,7 @@ export default function AdminDashboardPage() {
     { key: 'bookings', label: 'Bookings', icon: Calendar },
     { key: 'users', label: 'Users', icon: Users },
     { key: 'ai-config', label: 'AI Configuration', icon: Bot },
+    { key: 'cms', label: 'Content Management', icon: FileText },
     { key: 'settings', label: 'Settings', icon: Settings },
   ];
 
@@ -507,6 +510,11 @@ export default function AdminDashboardPage() {
         {/* AI Configuration Tab */}
         {activeTab === 'ai-config' && (
           <AIConfigPanel />
+        )}
+
+        {/* CMS Tab */}
+        {activeTab === 'cms' && (
+          <CMSAdminPanel />
         )}
 
         {/* Settings Tab */}

@@ -22,7 +22,9 @@ import {
   Wifi,
   Car,
   Waves,
-  Dumbbell
+  Dumbbell,
+  Maximize2,
+  Minimize2
 } from 'lucide-react';
 import { useChat } from '../contexts/ChatContext';
 import type { ChatMessage, ChatButton, Property } from '../../shared/types';
@@ -255,9 +257,11 @@ export default function ChatBot() {
     messages,
     isOpen,
     isLoading,
+    isFullScreen,
     sendMessage,
     toggleChat,
     closeChat,
+    toggleFullScreen,
     handleButtonClick,
     voiceEnabled,
     isListening,
@@ -326,6 +330,171 @@ export default function ChatBot() {
     );
   }
 
+  // Full screen mode
+  if (isFullScreen) {
+    return (
+      <div className="fixed inset-0 z-50 bg-white flex flex-col">
+        {/* Full Screen Header */}
+        <div className="bg-[#2957c3] text-white p-4 flex items-center justify-between">
+          <div className="flex items-center space-x-2">
+            <div className="w-8 h-8 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
+              <User className="h-5 w-5" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-sm">Sara</h3>
+              <p className="text-xs text-blue-100">Your accommodation assistant</p>
+            </div>
+          </div>
+          
+          <div className="flex items-center space-x-2">
+            {/* Voice Toggle */}
+            <button
+              onClick={toggleVoice}
+              className={clsx(
+                'p-1 rounded transition-colors',
+                voiceEnabled ? 'bg-white bg-opacity-20' : 'hover:bg-white hover:bg-opacity-10'
+              )}
+              title={voiceEnabled ? 'Disable voice' : 'Enable voice'}
+            >
+              {voiceEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
+            </button>
+            
+            {/* Clear Conversation */}
+            <button
+              onClick={clearConversation}
+              className="p-1 rounded hover:bg-white hover:bg-opacity-10 transition-colors"
+              title="New conversation"
+            >
+              <RotateCcw className="h-4 w-4" />
+            </button>
+            
+            {/* Toggle Full Screen */}
+            <button
+              onClick={toggleFullScreen}
+              className="p-1 rounded hover:bg-white hover:bg-opacity-10 transition-colors"
+              title="Exit full screen"
+            >
+              <Minimize2 className="h-4 w-4" />
+            </button>
+            
+            {/* Close */}
+            <button
+              onClick={closeChat}
+              className="p-1 rounded hover:bg-white hover:bg-opacity-10 transition-colors"
+              title="Close chat"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
+
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4">
+          {messages.map((message, index) => (
+            <div
+              key={index}
+              className={clsx(
+                'flex',
+                message.role === 'user' ? 'justify-end' : 'justify-start'
+              )}
+            >
+              <div
+                className={clsx(
+                  'max-w-[85%] p-3 rounded-lg text-sm',
+                  message.role === 'user'
+                    ? 'bg-[#2957c3] text-white rounded-br-none'
+                    : 'bg-gray-100 text-gray-800 rounded-bl-none'
+                )}
+              >
+                {message.role === 'assistant' ? (
+                  <MessageContent
+                    message={message}
+                    onButtonClick={handleButtonClick}
+                    onPropertyBook={handlePropertyBook}
+                    onPropertyViewDetails={handlePropertyViewDetails}
+                  />
+                ) : (
+                  <div>{message.content}</div>
+                )}
+              </div>
+            </div>
+          ))}
+          
+          {isLoading && (
+            <div className="flex justify-start">
+              <div className="bg-gray-100 text-gray-800 p-3 rounded-lg rounded-bl-none text-sm">
+                <div className="flex space-x-1">
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></div>
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                  <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          <div ref={messagesEndRef} />
+        </div>
+
+        {/* Input */}
+        <div className="p-4 border-t border-gray-200">
+          <div className="flex space-x-2">
+            <input
+              ref={inputRef}
+              type="text"
+              value={inputMessage}
+              onChange={(e) => setInputMessage(e.target.value)}
+              onKeyPress={handleKeyPress}
+              placeholder="Ask Sara about accommodations..."
+              className="flex-1 border border-gray-300 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#2957c3] focus:border-transparent"
+              disabled={isLoading}
+            />
+            
+            {/* Voice Input Button */}
+            <button
+              onClick={isListening ? stopListening : startListening}
+              disabled={!voiceEnabled || isLoading}
+              className={clsx(
+                'p-2 rounded-md transition-colors',
+                isListening
+                  ? 'bg-red-500 text-white hover:bg-red-600'
+                  : voiceEnabled
+                    ? 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    : 'bg-gray-50 text-gray-400 cursor-not-allowed'
+              )}
+              title={isListening ? 'Stop listening' : 'Voice input'}
+            >
+              {isListening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
+            </button>
+            
+            {/* Send Button */}
+            <button
+              onClick={handleSendMessage}
+              disabled={isLoading || !inputMessage.trim()}
+              className={clsx(
+                'p-2 rounded-md transition-colors',
+                isLoading || !inputMessage.trim()
+                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                  : 'bg-[#2957c3] text-white hover:bg-blue-700'
+              )}
+              title="Send message"
+            >
+              <Send className="h-4 w-4" />
+            </button>
+          </div>
+          
+          {/* Voice Status */}
+          {isListening && (
+            <div className="mt-2 text-xs text-red-600 flex items-center">
+              <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse mr-2"></div>
+              Listening... Speak now
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Widget mode
   return (
     <div className="fixed bottom-6 right-6 z-50 w-96 h-[32rem] bg-white rounded-lg shadow-2xl border border-gray-200 flex flex-col">
       {/* Header */}
@@ -341,6 +510,21 @@ export default function ChatBot() {
         </div>
         
         <div className="flex items-center space-x-2">
+          {/* Toggle Full Screen */}
+          <button
+            onClick={() => {
+              toggleFullScreen();
+              // When entering full screen, we want to ensure Sara is properly initialized
+              if (messages.length === 0) {
+                // This will trigger the initialization in the context
+              }
+            }}
+            className="p-1 rounded hover:bg-white hover:bg-opacity-10 transition-colors"
+            title="Full screen"
+          >
+            <Maximize2 className="h-4 w-4" />
+          </button>
+          
           {/* Voice Toggle */}
           <button
             onClick={toggleVoice}

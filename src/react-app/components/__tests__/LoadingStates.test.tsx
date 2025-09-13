@@ -1,5 +1,4 @@
-import { render, screen } from '@testing-library/react';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { 
   LoadingSpinner, 
   LoadingState, 
@@ -9,6 +8,7 @@ import {
   PropertyCardSkeleton,
   FormFieldSkeleton
 } from '../LoadingStates';
+import { render, screen } from '../../../test/utils';
 
 describe('LoadingStates', () => {
   describe('LoadingSpinner', () => {

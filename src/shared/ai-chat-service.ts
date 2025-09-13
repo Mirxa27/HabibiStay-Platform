@@ -67,7 +67,7 @@ interface AIResponse {
   moderation_flags?: string[];
 }
 
-export class AIProviderInterface {
+export abstract class AIProviderInterface {
   abstract generateResponse(messages: ChatMessage[], config: AIConfig, context?: any): Promise<AIResponse>;
   abstract moderateContent(content: string): Promise<{ flagged: boolean; categories: string[] }>;
 }

@@ -1,6 +1,8 @@
 // Production-Ready Notification Service for HabibiStay
 // Handles email, SMS, and push notifications with queue management
 
+import { PushNotificationService } from './push-notification-service';
+
 export interface NotificationTemplate {
   id: string;
   type: 'email' | 'sms' | 'push';
@@ -30,7 +32,11 @@ export interface NotificationData {
 }
 
 export class NotificationService {
-  constructor(private db: any, private emailService: any) {}
+  constructor(
+    private db: any, 
+    private emailService: any,
+    private pushService?: PushNotificationService
+  ) {}
 
   // Send notification based on event and user preferences
   async sendNotification(event: string, recipient: string, variables: Record<string, any>, userId?: string): Promise<{
@@ -112,15 +118,64 @@ export class NotificationService {
               break;
 
             case 'push':
-              // Push notification implementation would go here
-              await this.logNotification({
-                recipient,
-                type: 'push',
-                template_key: template.template_key,
-                variables,
-                priority: template.priority,
-                user_id: userId
-              }, 'pending');
+              // Push notification implementation
+              if (this.pushService && userId) {
+                // Get user device tokens
+                const deviceTokens = await this.pushService.getUserDeviceTokens(userId, this.db);
+                
+                if (deviceTokens.length > 0) {
+                  // Render push notification content
+                  const pushContent = await this.renderPushTemplate(template.template_key, variables);
+                  
+                  // Send to all user devices
+                  const pushResults = await this.pushService.sendToDevices(deviceTokens, pushContent);
+                  
+                  // Log results
+                  for (const result of pushResults) {
+                    if (result.success) {
+                      notificationsSent++;
+                      await this.logNotification({
+                        recipient,
+                        type: 'push',
+                        template_key: template.template_key,
+                        variables,
+                        priority: template.priority,
+                        user_id: userId
+                      }, 'sent', result.messageId);
+                    } else {
+                      errors.push(`Push notification failed: ${result.error}`);
+                      await this.logNotification({
+                        recipient,
+                        type: 'push',
+                        template_key: template.template_key,
+                        variables,
+                        priority: template.priority,
+                        user_id: userId
+                      }, 'failed', null, result.error);
+                    }
+                  }
+                } else {
+                  // No device tokens found, log as pending
+                  await this.logNotification({
+                    recipient,
+                    type: 'push',
+                    template_key: template.template_key,
+                    variables,
+                    priority: template.priority,
+                    user_id: userId
+                  }, 'pending');
+                }
+              } else {
+                // Push service not configured or no user ID, log as pending
+                await this.logNotification({
+                    recipient,
+                    type: 'push',
+                    template_key: template.template_key,
+                    variables,
+                    priority: template.priority,
+                    user_id: userId
+                  }, 'pending');
+              }
               break;
           }
         } catch (error) {
@@ -140,6 +195,77 @@ export class NotificationService {
         notifications_sent: 0,
         errors: [error.message]
       };
+    }
+  }
+
+  // Render push notification template
+  private async renderPushTemplate(templateKey: string, variables: Record<string, any>): Promise<{
+    title: string;
+    body: string;
+    data?: Record<string, string>;
+  }> {
+    // In a real implementation, this would fetch templates from the database
+    // For now, we'll use simple templates based on the template key
+    switch (templateKey) {
+      case 'mobile_booking_confirmation':
+        return {
+          title: 'Booking Confirmed!',
+          body: `Your booking for ${variables.property_title} is confirmed.`,
+          data: { 
+            type: 'booking_confirmation',
+            booking_id: variables.booking_id
+          }
+        };
+      
+      case 'mobile_booking_cancellation':
+        return {
+          title: 'Booking Cancelled',
+          body: `Your booking for ${variables.property_title} has been cancelled.`,
+          data: { 
+            type: 'booking_cancellation',
+            booking_id: variables.booking_id
+          }
+        };
+      
+      case 'mobile_checkin_reminder':
+        return {
+          title: 'Check-in Reminder',
+          body: `Your check-in for ${variables.property_title} is tomorrow.`,
+          data: { 
+            type: 'checkin_reminder',
+            booking_id: variables.booking_id
+          }
+        };
+      
+      case 'mobile_payment_confirmation':
+        return {
+          title: 'Payment Confirmed',
+          body: `Your payment of ${variables.amount_paid} SAR has been confirmed.`,
+          data: { 
+            type: 'payment_confirmation',
+            booking_id: variables.booking_id
+          }
+        };
+      
+      case 'mobile_payment_failed':
+        return {
+          title: 'Payment Failed',
+          body: 'Your payment could not be processed. Please try again.',
+          data: { 
+            type: 'payment_failed',
+            booking_id: variables.booking_id
+          }
+        };
+      
+      default:
+        return {
+          title: 'HabibiStay Notification',
+          body: 'You have a new notification from HabibiStay.',
+          data: { 
+            type: 'general',
+            template_key: templateKey
+          }
+        };
     }
   }
 
@@ -279,6 +405,127 @@ export class NotificationService {
       refund_amount: refundInfo.refund_amount,
       cancellation_fee: refundInfo.cancellation_fee
     }, booking.user_id);
+  }
+
+  // Send mobile booking confirmation
+  async sendMobileBookingConfirmation(booking: any): Promise<void> {
+    if (booking.user_id) {
+      await this.sendNotification('booking_confirmation', booking.guest_email, {
+        booking_id: booking.id,
+        guest_name: booking.guest_name,
+        property_title: booking.property_title,
+        check_in_date: booking.check_in_date,
+        check_out_date: booking.check_out_date,
+        total_amount: booking.total_amount
+      }, booking.user_id);
+    }
+  }
+
+  // Send mobile payment confirmation
+  async sendMobilePaymentConfirmation(booking: any, payment: any): Promise<void> {
+    if (booking.user_id) {
+      await this.sendNotification('payment_confirmation', booking.guest_email, {
+        booking_id: booking.id,
+        transaction_id: payment.transaction_id,
+        amount_paid: payment.amount,
+        payment_method: payment.payment_method
+      }, booking.user_id);
+    }
+  }
+
+  // Send mobile booking cancellation
+  async sendMobileBookingCancellation(booking: any, refundInfo: any): Promise<void> {
+    if (booking.user_id) {
+      await this.sendNotification('booking_cancellation', booking.guest_email, {
+        booking_id: booking.id,
+        guest_name: booking.guest_name,
+        property_title: booking.property_title,
+        refund_amount: refundInfo.refund_amount,
+        cancellation_fee: refundInfo.cancellation_fee
+      }, booking.user_id);
+    }
+  }
+
+  // Send mobile check-in reminder
+  async sendMobileCheckinReminder(booking: any): Promise<void> {
+    if (booking.user_id) {
+      const checkInDate = new Date(booking.check_in_date);
+      const now = new Date();
+      const daysUntilCheckIn = Math.ceil((checkInDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+
+      await this.sendNotification('checkin_reminder', booking.guest_email, {
+        booking_id: booking.id,
+        guest_name: booking.guest_name,
+        property_title: booking.property_title,
+        check_in_date: booking.check_in_date,
+        days_until_checkin: daysUntilCheckIn
+      }, booking.user_id);
+    }
+  }
+
+  // Send mobile payment failed notification
+  async sendMobilePaymentFailed(booking: any, failureInfo: any): Promise<void> {
+    if (booking.user_id) {
+      await this.sendNotification('payment_failed', booking.guest_email, {
+        booking_id: booking.id,
+        amount: failureInfo.amount,
+        payment_method: failureInfo.payment_method,
+        failure_reason: failureInfo.failure_reason
+      }, booking.user_id);
+    }
+  }
+
+  // Send mobile review request
+  async sendMobileReviewRequest(booking: any): Promise<void> {
+    if (booking.user_id) {
+      await this.sendNotification('review_request', booking.guest_email, {
+        booking_id: booking.id,
+        guest_name: booking.guest_name,
+        property_title: booking.property_title,
+        check_in_date: booking.check_in_date,
+        check_out_date: booking.check_out_date,
+        review_url: `${process.env.WEBSITE_URL}/review/${booking.id}`
+      }, booking.user_id);
+    }
+  }
+
+  // Send mobile wishlist price drop notification
+  async sendMobileWishlistPriceDrop(property: any, user: any): Promise<void> {
+    if (user.id) {
+      await this.sendNotification('wishlist_price_drop', user.email, {
+        property_title: property.title,
+        new_price: property.price,
+        previous_price: property.previous_price,
+        property_url: `${process.env.WEBSITE_URL}/property/${property.id}`
+      }, user.id);
+    }
+  }
+
+  // Send mobile account security alert
+  async sendMobileAccountSecurityAlert(user: any, alertInfo: any): Promise<void> {
+    if (user.id) {
+      await this.sendNotification('account_security', user.email, {
+        user_name: user.name,
+        alert_type: alertInfo.alert_type,
+        alert_description: alertInfo.description,
+        ip_address: alertInfo.ip_address,
+        timestamp: alertInfo.timestamp
+      }, user.id);
+    }
+  }
+
+  // Send mobile marketing offer
+  async sendMobileMarketingOffer(user: any, offer: any): Promise<void> {
+    if (user.id) {
+      await this.sendNotification('marketing_offer', user.email, {
+        user_name: user.name,
+        offer_title: offer.title,
+        discount_percentage: offer.discount_percentage,
+        offer_expiry: offer.expiry_date,
+        offer_url: `${process.env.WEBSITE_URL}/offer/${offer.id}`,
+        offer_code: offer.code
+      }, user.id);
+    }
   }
 }
 

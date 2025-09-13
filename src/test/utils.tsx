@@ -2,9 +2,8 @@
 
 import { ReactElement } from 'react';
 import { render as rtlRender, RenderOptions, RenderResult } from '@testing-library/react';
-import { BrowserRouter } from 'react-router-dom';
 import { vi } from 'vitest';
-import { ChatProvider } from '@/contexts/ChatContext';
+import '@testing-library/jest-dom';
 
 // Mock data generators
 export const mockUser = {
@@ -100,7 +99,7 @@ export const mockPricingSettings = {
 };
 
 // Mock API responses
-export const mockApiResponse = <T>(data: T, success = true) => ({
+export const mockApiResponse = <T,>(data: T, success = true) => ({
   success,
   data,
   message: success ? 'Success' : 'Error',
@@ -151,20 +150,12 @@ function AllTheProviders({
   };
 
   let content = (
-    <BrowserRouter>
+    <div>
       <AuthProvider>
         {children}
       </AuthProvider>
-    </BrowserRouter>
+    </div>
   );
-
-  if (withChat) {
-    content = (
-      <ChatProvider>
-        {content}
-      </ChatProvider>
-    );
-  }
 
   return content;
 }
@@ -217,7 +208,7 @@ export const mockFetch = (response: any, ok = true, status = 200) => {
     type: 'default' as ResponseType,
     url: 'http://localhost:3000/api/test',
     statusText: ok ? 'OK' : 'Error',
-  } as Response);
+  } as unknown as Response);
 };
 
 // Mock error fetch
@@ -307,64 +298,6 @@ export const createMockReview = (overrides = {}) => ({
   ...overrides,
 });
 
-// Custom matchers and assertions
-export const expectToBeInTheDocument = (element: HTMLElement | null) => {
-  expect(element).toBeInTheDocument();
-};
-
-export const expectToHaveClass = (element: HTMLElement | null, className: string) => {
-  expect(element).toHaveClass(className);
-};
-
-export const expectToHaveAttribute = (element: HTMLElement | null, attribute: string, value?: string) => {
-  if (value !== undefined) {
-    expect(element).toHaveAttribute(attribute, value);
-  } else {
-    expect(element).toHaveAttribute(attribute);
-  }
-};
-
-// Performance testing helpers
-export const measureComponentRenderTime = async (renderFn: () => void) => {
-  const start = performance.now();
-  renderFn();
-  const end = performance.now();
-  return end - start;
-};
-
-// Accessibility testing helpers
-export const checkAccessibility = async (container: HTMLElement) => {
-  // Basic accessibility checks
-  const buttons = container.querySelectorAll('button');
-  const links = container.querySelectorAll('a');
-  const inputs = container.querySelectorAll('input, textarea, select');
-  const images = container.querySelectorAll('img');
-
-  // Check for proper ARIA labels
-  buttons.forEach(button => {
-    const hasLabel = button.getAttribute('aria-label') || 
-                    button.getAttribute('aria-labelledby') || 
-                    button.textContent?.trim();
-    if (!hasLabel) {
-      console.warn('Button without accessible label found:', button);
-    }
-  });
-
-  // Check for alt text on images
-  images.forEach(img => {
-    if (!img.getAttribute('alt')) {
-      console.warn('Image without alt text found:', img);
-    }
-  });
-
-  return {
-    buttonsCount: buttons.length,
-    linksCount: links.length,
-    inputsCount: inputs.length,
-    imagesCount: images.length,
-  };
-};
-
 export default {
   mockUser,
   mockAdmin,
@@ -386,9 +319,4 @@ export default {
   createMockUser,
   createMockBooking,
   createMockReview,
-  expectToBeInTheDocument,
-  expectToHaveClass,
-  expectToHaveAttribute,
-  measureComponentRenderTime,
-  checkAccessibility,
 };

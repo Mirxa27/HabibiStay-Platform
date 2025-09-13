@@ -1,10 +1,10 @@
 // Property search functionality tests
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { renderWithProviders, mockFetch, mockApiResponse, createMockProperty } from '@test/utils';
+import { renderWithProviders, mockFetch, mockApiResponse, createMockProperty } from './utils.tsx';
 import Stays from '@/react-app/pages/Stays';
+import { screen, waitFor, fireEvent } from './utils.tsx';
 
 // Mock react-router-dom
 const mockNavigate = vi.fn();

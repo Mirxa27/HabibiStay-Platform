@@ -1,11 +1,11 @@
 // Booking system tests
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { renderWithProviders, mockFetch, mockApiResponse, createMockProperty, createMockBooking } from '@test/utils';
+import { renderWithProviders, mockFetch, mockApiResponse, createMockProperty, createMockBooking } from './utils.tsx';
 import BookingModal from '@/react-app/components/BookingModal';
 import PaymentModal from '@/react-app/components/PaymentModal';
+import { screen, waitFor, fireEvent } from './utils.tsx';
 
 // Mock react-router-dom
 const mockNavigate = vi.fn();

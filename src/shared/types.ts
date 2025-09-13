@@ -231,7 +231,7 @@ export type Payment = z.infer<typeof PaymentSchema>;
 // ENHANCED AI & CHATBOT TYPES
 // ===============================
 
-export type AIProvider = 'openai' | 'anthropic' | 'gemini';
+export type AIProviderType = 'openai' | 'anthropic' | 'gemini';
 export type PersonalityType = 'professional' | 'friendly' | 'casual';
 export type MessageRole = 'user' | 'assistant' | 'system';
 
@@ -582,6 +582,143 @@ export const CANCELLATION_POLICIES = [
   'strict',
   'super_strict',
 ] as const;
+
+// ===============================
+// CMS TYPES
+// ===============================
+
+// Page model
+export const PageSchema = z.object({
+  id: z.number(),
+  title: z.string(),
+  slug: z.string(),
+  template_id: z.number().nullable(),
+  content: z.string().nullable(), // JSON structure
+  metadata: z.string().nullable(), // JSON metadata
+  status: z.enum(['draft', 'published', 'archived']),
+  created_by: z.string().nullable(),
+  updated_by: z.string().nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
+  published_at: z.string().nullable(),
+});
+
+// Template model
+export const TemplateSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  description: z.string().nullable(),
+  content_structure: z.string().nullable(), // JSON structure
+  preview_image: z.string().nullable(),
+  is_default: z.boolean(),
+  parent_template_id: z.number().nullable(), // For template inheritance
+  design_settings: z.string().nullable(), // JSON design settings
+  created_by: z.string().nullable(),
+  updated_by: z.string().nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+
+// Component model
+export const ComponentSchema = z.object({
+  id: z.number(),
+  type: z.string(),
+  name: z.string(),
+  properties: z.string().nullable(), // JSON properties
+  styles: z.string().nullable(), // JSON styles
+  created_by: z.string().nullable(),
+  updated_by: z.string().nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+
+// Media model
+export const MediaSchema = z.object({
+  id: z.number(),
+  filename: z.string(),
+  original_name: z.string(),
+  mime_type: z.string(),
+  size: z.number(),
+  url: z.string(),
+  alt_text: z.string().nullable(),
+  caption: z.string().nullable(),
+  created_by: z.string().nullable(),
+  created_at: z.string(),
+});
+
+// Content version model
+export const ContentVersionSchema = z.object({
+  id: z.number(),
+  content_id: z.number(),
+  content_type: z.enum(['page', 'template', 'component']),
+  data: z.string().nullable(), // JSON data
+  created_by: z.string().nullable(),
+  created_at: z.string(),
+  comment: z.string().nullable(),
+});
+
+// AI Provider model (CMS)
+export const CMSAIProviderSchema = z.object({
+  id: z.number(),
+  name: z.string(),
+  api_key: z.string().nullable(),
+  api_url: z.string().nullable(),
+  enabled: z.boolean(),
+  default_model: z.string().nullable(),
+  created_at: z.string(),
+  updated_at: z.string(),
+});
+
+// AI Model model
+export const AIModelSchema = z.object({
+  id: z.number(),
+  provider_id: z.number(),
+  name: z.string(),
+  capabilities: z.string().nullable(), // JSON array
+  max_tokens: z.number().nullable(),
+  pricing: z.number().nullable(),
+  performance: z.number().nullable(),
+  created_at: z.string(),
+});
+
+// AI Content Job model
+export const AIContentJobSchema = z.object({
+  id: z.number(),
+  provider_id: z.number(),
+  model_id: z.number(),
+  prompt: z.string(),
+  content: z.string().nullable(),
+  status: z.enum(['pending', 'processing', 'completed', 'failed']),
+  created_by: z.string().nullable(),
+  created_at: z.string(),
+  completed_at: z.string().nullable(),
+  metadata: z.string().nullable(), // JSON metadata
+});
+
+// AI Content History model
+export const AIContentHistorySchema = z.object({
+  id: z.number(),
+  job_id: z.number(),
+  content: z.string(),
+  version: z.number(),
+  created_by: z.string().nullable(),
+  created_at: z.string(),
+});
+
+// Export CMS types
+export type Page = z.infer<typeof PageSchema>;
+export type Template = z.infer<typeof TemplateSchema>;
+export type Component = z.infer<typeof ComponentSchema>;
+export type Media = z.infer<typeof MediaSchema>;
+export type ContentVersion = z.infer<typeof ContentVersionSchema>;
+export type CMSAIProvider = z.infer<typeof CMSAIProviderSchema>;
+export type AIModel = z.infer<typeof AIModelSchema>;
+export type AIContentJob = z.infer<typeof AIContentJobSchema>;
+export type AIContentHistory = z.infer<typeof AIContentHistorySchema>;
+
+// ===============================
+// API RESPONSE TYPES
+// ===============================
 
 // API Response types
 export interface ApiResponse<T = any> {

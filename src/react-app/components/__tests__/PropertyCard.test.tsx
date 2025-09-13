@@ -1,7 +1,7 @@
-import { render, screen } from '@testing-library/react';
 import { describe, it, expect } from 'vitest';
 import PropertyCard from '../PropertyCard';
 import type { Property } from '@/shared/types';
+import { render, screen } from '../../../test/utils';
 
 describe('PropertyCard', () => {
   const mockProperty: Property = {

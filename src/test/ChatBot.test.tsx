@@ -1,10 +1,10 @@
 // ChatBot component tests
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { renderWithProviders, mockFetch, mockApiResponse, waitForAsync } from '@test/utils';
+import { renderWithProviders, mockFetch, mockApiResponse, waitForAsync } from './utils.tsx';
 import ChatBot from '@/react-app/components/ChatBot';
+import { screen, waitFor, fireEvent } from './utils.tsx';
 
 // Mock the ChatContext
 const mockChatContext = {

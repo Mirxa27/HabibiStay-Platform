@@ -1,8 +1,8 @@
-import { render, screen, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi } from 'vitest';
 import { BrowserRouter } from 'react-router';
 import MobilePropertyCard from '../MobilePropertyCard';
 import type { Property } from '@/shared/types';
+import { render, screen, fireEvent } from '../../../test/utils';
 
 // Wrapper component to provide router context
 const TestWrapper = ({ children }: { children: React.ReactNode }) => (

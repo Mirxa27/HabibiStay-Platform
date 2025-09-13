@@ -12,6 +12,7 @@ declare global {
 interface ChatContextType {
   messages: ChatMessage[];
   isOpen: boolean;
+  isFullScreen: boolean;
   isLoading: boolean;
   conversationId: string | null;
   featuredProperties: Property[];
@@ -23,6 +24,7 @@ interface ChatContextType {
   toggleChat: () => void;
   closeChat: () => void;
   openChat: () => void;
+  toggleFullScreen: () => void;
   showPropertyCard: (property: Property) => void;
   initiateBooking: (propertyId: number) => void;
   updateBookingData: (data: Partial<CreateBooking>) => void;
@@ -31,6 +33,12 @@ interface ChatContextType {
   startListening: () => void;
   stopListening: () => void;
   clearConversation: () => void;
+  // New methods for enhanced functionality
+  searchProperties: (criteria: any) => Promise<void>;
+  viewPropertyDetails: (propertyId: number) => Promise<void>;
+  startBookingProcess: (propertyId: number) => void;
+  completeBooking: (bookingData: Partial<CreateBooking>) => Promise<void>;
+  processPayment: (paymentData: any) => Promise<void>;
 }
 
 const ChatContext = createContext<ChatContextType | undefined>(undefined);
@@ -53,6 +61,7 @@ const CONVERSATION_TIMEOUT = 30 * 60 * 1000; // 30 minutes
 export function ChatProvider({ children }: ChatProviderProps) {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isOpen, setIsOpen] = useState(false);
+  const [isFullScreen, setIsFullScreen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [featuredProperties, setFeaturedProperties] = useState<Property[]>([]);
@@ -316,10 +325,48 @@ export function ChatProvider({ children }: ChatProviderProps) {
         // Open contact form or redirect
         window.location.href = '/contact';
         break;
+      // Handle booking flow actions
+      case 'booking_dates':
+        await sendMessage('Please provide your check-in and check-out dates', 'booking_dates');
+        break;
+      case 'guest_count':
+        await sendMessage('How many guests will be staying?', 'guest_count');
+        break;
+      case 'guest_info':
+        await sendMessage('Please provide your name and contact information', 'guest_info');
+        break;
+      case 'payment':
+        if (button.data) {
+          await processPayment(button.data);
+        }
+        break;
+      case 'view_booking':
+        await sendMessage('I want to view my booking details', 'view_booking');
+        break;
+      case 'complete_payment':
+        if (button.data?.payment_url) {
+          window.open(button.data.payment_url, '_blank');
+        }
+        break;
+      case 'view_payment':
+        await sendMessage('I want to view my payment details', 'view_payment');
+        break;
+      case 'retry_booking':
+        await sendMessage('I want to retry my booking', 'retry_booking');
+        break;
+      case 'retry_payment':
+        await sendMessage('I want to retry my payment', 'retry_payment');
+        break;
+      case 'refine_search':
+        await sendMessage('I want to refine my property search', 'refine_search');
+        break;
+      case 'view_more':
+        await sendMessage('Show me more properties', 'view_more');
+        break;
       default:
         await sendMessage(button.text, button.action);
     }
-  }, [sendMessage, messages]);
+  }, [sendMessage, messages, processPayment]);
 
   const showPropertyCard = useCallback((property: Property) => {
     const propertyMessage: ChatMessage = {
@@ -394,6 +441,10 @@ export function ChatProvider({ children }: ChatProviderProps) {
     }
   }, [isListening]);
 
+  const toggleFullScreen = useCallback(() => {
+    setIsFullScreen(prev => !prev);
+  }, []);
+
   const toggleVoice = useCallback(() => {
     setVoiceEnabled(prev => !prev);
   }, []);
@@ -420,9 +471,204 @@ export function ChatProvider({ children }: ChatProviderProps) {
     initializeSara();
   }, [initializeSara]);
 
+  // Enhanced functionality methods
+  const searchProperties = useCallback(async (criteria: any) => {
+    setIsLoading(true);
+    try {
+      const params = new URLSearchParams();
+      Object.entries(criteria).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') {
+          params.append(key, value.toString());
+        }
+      });
+
+      const response = await fetch(`/api/properties?${params.toString()}`);
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success && result.data) {
+          const propertiesMessage: ChatMessage = {
+            role: 'assistant',
+            content: `I found ${result.data.length} properties matching your criteria:`,
+            timestamp: new Date().toISOString(),
+            metadata: {
+              type: 'property_list',
+              properties: result.data,
+              buttons: [
+                { id: 'refine_search', text: '🔍 Refine Search', action: 'refine_search', style: 'secondary' },
+                { id: 'view_more', text: '📋 View More', action: 'view_more', style: 'secondary' },
+              ],
+            },
+          };
+          addMessage(propertiesMessage);
+        }
+      }
+    } catch (error) {
+      console.error('Error searching properties:', error);
+      const errorMessage: ChatMessage = {
+        role: 'assistant',
+        content: "I'm sorry, I couldn't search for properties right now. Please try again.",
+        timestamp: new Date().toISOString(),
+        metadata: {
+          error: true,
+        },
+      };
+      addMessage(errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [addMessage]);
+
+  const viewPropertyDetails = useCallback(async (propertyId: number) => {
+    setIsLoading(true);
+    try {
+      const response = await fetch(`/api/properties/${propertyId}`);
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success && result.data) {
+          showPropertyCard(result.data);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching property details:', error);
+      const errorMessage: ChatMessage = {
+        role: 'assistant',
+        content: "I'm sorry, I couldn't fetch the property details right now. Please try again.",
+        timestamp: new Date().toISOString(),
+        metadata: {
+          error: true,
+        },
+      };
+      addMessage(errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [addMessage, showPropertyCard]);
+
+  const startBookingProcess = useCallback((propertyId: number) => {
+    initiateBooking(propertyId);
+  }, [initiateBooking]);
+
+  const completeBooking = useCallback(async (bookingData: Partial<CreateBooking>) => {
+    setIsLoading(true);
+    try {
+      const response = await fetch('/api/bookings', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(bookingData),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success && result.data) {
+          const bookingConfirmationMessage: ChatMessage = {
+            role: 'assistant',
+            content: `Great! Your booking request has been created successfully. Here are the details:\n\nBooking ID: ${result.data.booking_id}\nProperty: ${result.data.property_title}\nTotal Amount: ${result.data.total_amount} SAR\nStatus: ${result.data.status}\n\nNext steps:`,
+            timestamp: new Date().toISOString(),
+            metadata: {
+              type: 'booking_confirmation',
+              booking: result.data,
+              buttons: result.data.next_step ? [
+                { 
+                  id: 'proceed_payment', 
+                  text: '💳 Proceed to Payment', 
+                  action: 'payment', 
+                  style: 'primary',
+                  data: result.data.next_step.payment_data
+                },
+                { id: 'view_booking', text: '📋 View Booking Details', action: 'view_booking', style: 'secondary' },
+              ] : [],
+            },
+          };
+          addMessage(bookingConfirmationMessage);
+          setCurrentBooking(null);
+        }
+      } else {
+        throw new Error('Failed to create booking');
+      }
+    } catch (error) {
+      console.error('Error completing booking:', error);
+      const errorMessage: ChatMessage = {
+        role: 'assistant',
+        content: "I'm sorry, I couldn't complete your booking right now. Please try again or contact support.",
+        timestamp: new Date().toISOString(),
+        metadata: {
+          error: true,
+          buttons: [
+            { id: 'retry_booking', text: '🔄 Retry Booking', action: 'retry_booking', style: 'primary' },
+            { id: 'contact_support', text: '📞 Contact Support', action: 'contact', style: 'secondary' },
+          ],
+        },
+      };
+      addMessage(errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [addMessage]);
+
+  const processPayment = useCallback(async (paymentData: any) => {
+    setIsLoading(true);
+    try {
+      const response = await fetch('/api/payments/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(paymentData),
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success && result.data) {
+          const paymentMessage: ChatMessage = {
+            role: 'assistant',
+            content: `Your payment request has been processed! Here are the details:\n\nPayment ID: ${result.data.payment_id}\nStatus: ${result.data.status}\nProvider: ${result.data.provider}\n\nYou will be redirected to the payment page shortly.`,
+            timestamp: new Date().toISOString(),
+            metadata: {
+              type: 'payment_details',
+              payment: result.data,
+              buttons: [
+                { 
+                  id: 'complete_payment', 
+                  text: '🔒 Complete Payment', 
+                  action: 'complete_payment', 
+                  style: 'primary',
+                  data: { payment_url: result.data.payment_url }
+                },
+                { id: 'view_payment', text: '📋 View Payment Details', action: 'view_payment', style: 'secondary' },
+              ],
+            },
+          };
+          addMessage(paymentMessage);
+        }
+      } else {
+        throw new Error('Failed to process payment');
+      }
+    } catch (error) {
+      console.error('Error processing payment:', error);
+      const errorMessage: ChatMessage = {
+        role: 'assistant',
+        content: "I'm sorry, I couldn't process your payment right now. Please try again or contact support.",
+        timestamp: new Date().toISOString(),
+        metadata: {
+          error: true,
+          buttons: [
+            { id: 'retry_payment', text: '🔄 Retry Payment', action: 'retry_payment', style: 'primary' },
+            { id: 'contact_support', text: '📞 Contact Support', action: 'contact', style: 'secondary' },
+          ],
+        },
+      };
+      addMessage(errorMessage);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [addMessage]);
+
   const value: ChatContextType = {
     messages,
     isOpen,
+    isFullScreen,
     isLoading,
     conversationId,
     featuredProperties,
@@ -434,6 +680,7 @@ export function ChatProvider({ children }: ChatProviderProps) {
     toggleChat,
     closeChat,
     openChat,
+    toggleFullScreen,
     showPropertyCard,
     initiateBooking,
     updateBookingData,
@@ -442,6 +689,11 @@ export function ChatProvider({ children }: ChatProviderProps) {
     startListening,
     stopListening,
     clearConversation,
+    searchProperties,
+    viewPropertyDetails,
+    startBookingProcess,
+    completeBooking,
+    processPayment,
   };
 
   return (

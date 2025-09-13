@@ -3,11 +3,15 @@
 
 import { EMAIL_TEMPLATES } from './email-templates';
 import { ADDITIONAL_EMAIL_TEMPLATES } from './additional-email-templates';
+import { MORE_EMAIL_TEMPLATES } from './more-email-templates';
+import { MORE_EMAIL_TEMPLATES_2 } from './more-email-templates-2';
 
 // Combine all email templates
 const ALL_TEMPLATES = {
   ...EMAIL_TEMPLATES,
-  ...ADDITIONAL_EMAIL_TEMPLATES
+  ...ADDITIONAL_EMAIL_TEMPLATES,
+  ...MORE_EMAIL_TEMPLATES,
+  ...MORE_EMAIL_TEMPLATES_2
 };
 
 export interface EmailProvider {

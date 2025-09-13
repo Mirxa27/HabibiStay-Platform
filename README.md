@@ -12,6 +12,7 @@ HabibiStay is a full-stack vacation rental platform built with React 19 (fronten
 - Role-based admin dashboard (RBAC)
 - Email/SMS notifications (Resend/SendGrid/SES/Twilio)
 - Mobile-first responsive design (Tailwind CSS)
+- Content Management System (CMS) for website content management
 
 ## Tech Stack
 - **Frontend**: React 19, Vite, Tailwind CSS, React Router, React Hook Form, Zod
@@ -236,7 +237,15 @@ Base URL: `http://localhost:8787/api` (dev) / `https://api.habibistay.com/api` (
    - `GET /channels` - Channel manager
    - `POST /ai/config` - Update AI keys/models
 
-5. **Chat** (`/chat`)
+5. **Content Management** (`/cms`, admin role required)
+   - `GET /pages` - List all pages
+   - `GET /pages/:id` - Get specific page
+   - `POST /pages` - Create new page
+   - `PUT /pages/:id` - Update page
+   - `DELETE /pages/:id` - Delete page
+   - Similar endpoints for templates, components, media, and AI providers
+
+6. **Chat** (`/chat`)
    - `POST /enhanced` - AI response (with context/moderation)
    - `GET /:conversationId` - History
 

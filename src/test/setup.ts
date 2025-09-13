@@ -1,7 +1,6 @@
 // Test setup file for HabibiStay
 
 import '@testing-library/jest-dom';
-import { cleanup } from '@testing-library/react';
 import { afterEach, beforeAll, vi } from 'vitest';
 
 // Global test setup
@@ -16,7 +15,8 @@ beforeAll(() => {
 
 // Cleanup after each test
 afterEach(() => {
-  cleanup();
+  // We can't import cleanup from @testing-library/react here since we're using our own utils
+  // The cleanup is handled by our custom render function
   vi.clearAllMocks();
 });
 

@@ -191,6 +191,9 @@ export class PropertyService {
         properties = propertiesResult;
       } else if (propertiesResult && typeof propertiesResult === 'object' && 'results' in propertiesResult) {
         properties = Array.isArray(propertiesResult.results) ? propertiesResult.results : [];
+      } else if (propertiesResult && typeof propertiesResult === 'object' && Object.keys(propertiesResult).length > 0) {
+        // Handle case where propertiesResult is a single object (like from D1)
+        properties = [propertiesResult];
       }
 
       // Parse JSON fields
@@ -236,6 +239,9 @@ export class PropertyService {
         properties = propertiesResult;
       } else if (propertiesResult && typeof propertiesResult === 'object' && 'results' in propertiesResult) {
         properties = Array.isArray(propertiesResult.results) ? propertiesResult.results : [];
+      } else if (propertiesResult && typeof propertiesResult === 'object' && Object.keys(propertiesResult).length > 0) {
+        // Handle case where propertiesResult is a single object (like from D1)
+        properties = [propertiesResult];
       }
 
       return properties.map((property: any) => ({
