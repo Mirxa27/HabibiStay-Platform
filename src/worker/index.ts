@@ -1655,6 +1655,119 @@ app.get("/api/cms/pages/slug/:slug", async (c) => {
   }
 });
 
+// Setup endpoints (unauthenticated for initial setup)
+app.get("/api/setup/status", async (c) => {
+  try {
+    const services = initializeServices(c.env);
+    
+    // Check if any admin users exist
+    const adminExists = await checkAdminExists(services);
+    
+    return c.json({
+      success: true,
+      data: {
+        setup_complete: adminExists,
+        needs_setup: !adminExists
+      }
+    });
+  } catch (error) {
+    console.error('Setup status check error:', error);
+    return c.json({
+      success: false,
+      error: 'Failed to check setup status'
+    }, 500);
+  }
+});
+
+const SetupSchema = z.object({
+  admin_email: z.string().email(),
+  admin_password: z.string().min(8),
+  admin_name: z.string().min(2),
+  site_name: z.string().optional().default('HabibiStay'),
+  site_url: z.string().url().optional(),
+});
+
+app.post("/api/setup/initialize", zValidator('json', SetupSchema), async (c) => {
+  try {
+    const services = initializeServices(c.env);
+    const data = c.req.valid('json');
+    
+    // Check if setup is already complete
+    const adminExists = await checkAdminExists(services);
+    if (adminExists) {
+      return c.json({
+        success: false,
+        error: 'Setup has already been completed'
+      }, 409);
+    }
+    
+    // Create the first admin user
+    const adminUser = await createFirstAdminUser(services, data);
+    
+    // Log the setup completion
+    await auditLogger.log('system_setup', null, 'System initialization completed', {
+      admin_email: data.admin_email,
+      admin_name: data.admin_name,
+      timestamp: new Date().toISOString()
+    });
+    
+    return c.json({
+      success: true,
+      data: {
+        admin_id: adminUser.id,
+        setup_complete: true
+      },
+      message: 'Setup completed successfully'
+    });
+  } catch (error) {
+    console.error('Setup initialization error:', error);
+    return c.json({
+      success: false,
+      error: (error as Error).message || 'Failed to initialize setup'
+    }, 500);
+  }
+});
+
+// Helper functions
+async function checkAdminExists(services: any): Promise<boolean> {
+  try {
+    // Try to find any user with admin role
+    // This is a simple check - in production, you might want a more robust approach
+    const result = await services.propertyService.db.prepare(
+      'SELECT COUNT(*) as count FROM users WHERE role = ?'
+    ).bind('admin').first();
+    
+    return (result?.count || 0) > 0;
+  } catch (error) {
+    console.error('Error checking admin existence:', error);
+    return false;
+  }
+}
+
+async function createFirstAdminUser(services: any, data: any) {
+  const userId = crypto.randomUUID();
+  
+  // Hash the password
+  const hashedPassword = await hashPassword(data.admin_password);
+  
+  // Insert admin user
+  await services.propertyService.db.prepare(
+    `INSERT INTO users (id, email, password_hash, name, role, is_verified, is_active, created_at, updated_at)
+     VALUES (?, ?, ?, ?, 'admin', 1, 1, datetime('now'), datetime('now'))`
+  ).bind(userId, data.admin_email, hashedPassword, data.admin_name).run();
+  
+  return { id: userId, email: data.admin_email, name: data.admin_name };
+}
+
+// Simple password hashing (in production, use bcrypt or similar)
+async function hashPassword(password: string): Promise<string> {
+  const encoder = new TextEncoder();
+  const data = encoder.encode(password + (process.env.JWT_SECRET || 'fallback-salt'));
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const hashArray = Array.from(new Uint8Array(hashBuffer));
+  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+}
+
 // Health check endpoint
 app.get("/api/health", async (c) => {
   return c.json({

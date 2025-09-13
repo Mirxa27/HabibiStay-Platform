@@ -88,6 +88,8 @@
     "deploy:backup": "./scripts/deploy.sh backup",
     "deploy:rollback": "./scripts/deploy.sh rollback",
     "deploy:health": "./scripts/deploy.sh health",
+    "setup": "./scripts/setup-environment.sh",
+    "validate-env": "node scripts/validate-environment.js",
     "start": "node dist/server/index.js",
     "migrate": "node dist/server/migrate.js",
     "seed": "node dist/server/seed.js"
