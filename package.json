@@ -39,6 +39,7 @@
     "@vitest/coverage-v8": "^1.6.0",
     "autoprefixer": "^10.4.21",
     "concurrently": "^8.2.2",
+    "dotenv": "^17.2.2",
     "eslint": "9.25.1",
     "eslint-plugin-react-hooks": "5.2.0",
     "eslint-plugin-react-refresh": "0.4.19",
@@ -88,6 +89,8 @@
     "deploy:backup": "./scripts/deploy.sh backup",
     "deploy:rollback": "./scripts/deploy.sh rollback",
     "deploy:health": "./scripts/deploy.sh health",
+    "setup": "./scripts/setup-environment.sh",
+    "validate-env": "node scripts/validate-environment.js",
     "start": "node dist/server/index.js",
     "migrate": "node dist/server/migrate.js",
     "seed": "node dist/server/seed.js"
